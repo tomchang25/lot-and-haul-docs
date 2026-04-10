@@ -1,0 +1,142 @@
+# Block Main — Cross-Block Items
+
+Items that span multiple blocks or don't belong to a single block.
+---
+
+## Design Discussion — Session Notes
+
+### Player Progression System
+
+Three separate subsystems under `KnowledgeManager` (may be split later):
+
+- **Skill** — hard gate for layer advance and repair actions; checked via `LayerUnlockAction.required_skill` / `required_level`
+- **Perk** — hard gate for special item identification or sale routes; rare, designer-gated
+- **Knowledge** — soft buff accumulated by selling or inspecting items of the same category; reduces stamina cost or improves price estimate precision; never blocks advancement
+
+All three currently live in `KnowledgeManager`. Split into separate autoloads only when the interfaces diverge enough to warrant it.
+
+### Item Pool and Fork Density
+
+Item count per category is not a primary target. What prevents memorisation exploits is **fork density** — the number of diverging branches at each shared layer node. A small pool with high fork density is more effective than a large pool of linear chains.
+
+`ItemData` carries a `rarity: int` field (not shown to player). Used exclusively as a lot-draw filter. Rarity does not define price — `base_value` per layer handles that.
+
+### Lot and Location Structure
+
+Lots are grouped under **Locations** (e.g. a warehouse). One run visit covers one location with multiple lots. Benefits:
+
+- Maintenance costs (travel, staff) are per-location, not per-lot — amortised over multiple lots
+- Player browses all lots in a location before committing stamina and bids
+- Location tier maps to lot quality (beginner / mid / high-end)
+- Network/reputation gates which locations the player can access
+
+Each lot (including inspection) targets roughly one minute. Pass exists at auction; Skip added at inspection with no significant architecture change.
+
+Lot configuration per tier (approximate):
+
+| Tier | Categories | Rarity | Starting Layer | Notes |
+|------|-----------|--------|---------------|-------|
+| Beginner | Junk-heavy | 1–2 | 2 | Most items pre-identified |
+| Mid | Mixed | 1–3 | 1 | Stamina and skill investment begins to matter |
+| High-end | Mixed premium | 3–4 | 0–1 | Aggressive bidding; NPC knowledge reaches layer 2–3 |
+
+### Condition System (Deferred)
+
+When added, condition integrates into the existing advance gate with minimal changes:
+```gdscript
+# ItemEntry
+var condition: float = 1.0  # 0.0–1.0
+
+# LayerUnlockAction
+@export var required_condition: float = 0.0
+```
+
+Repair is a HOME action that raises `condition` at stamina + skill cost. Condition is a fixed value set at lot draw — no in-run degradation (revisit if design requires it).
+
+### Designer Tooling — Fork Tree Authoring
+
+Item identity chains are authored as fork trees in YAML. A Python script performs DFS expansion: each root-to-leaf path becomes one item's `identity_layers` array, written to SQLite for `.tres` generation. Shared prefix nodes (e.g. "Worn Painting" → "Old Painting") are written once and duplicated per branch by the script.
+
+Here's the reorganized format:
+
+---
+
+### `rolled_price` is coupled to player inspection state
+
+In `auction_scene.gd._init_auction()`, `_rolled_price` lerps between `get_npc_estimate()` and `get_player_estimate()`. More player inspection → higher auction price, which punishes inspection. Replace `get_player_estimate()` with a fixed NPC-side value independent of player-discovered layers.
+
+### `KnowledgeManager.can_advance` context check is inverted and hardcoded
+
+The guard `if action.context != ActionContext.AUCTION: return false` blocks every non-AUCTION action, rejecting all HOME advances. The active context should be passed in or read from a location/run record field, not hardcoded.
+
+### `get_opening_bid()` is non-deterministic across calls
+
+`get_npc_estimate()` rolls `randf()` per item on every call. Block 03 preview and Block 04 init can therefore produce different values for the same lot. Cache the NPC estimate on `LotEntry` at creation; both `get_opening_bid()` and `_rolled_price` derive from that cached value.
+
+### `LotEntry.create` ignores `LotData.veiled_chance`
+
+`LotData` has `veiled_chance: float` but `LotEntry.create` calls `ItemEntry.create(item)` with no second argument, defaulting to `0.0`. All items always spawn unveiled. Pass `data.veiled_chance` as the second argument.
+
+### Sell scene — sell items to merchant
+
+Player selects which cargo items to sell. Price is based on the item's active layer `base_value` with three adjustment tiers the player can apply: ±10%, ±50%, ±100%. NPC evaluates total ask price only — no per-item negotiation. Repeated max-price asks trigger a merchant lock (e.g. 7-day cooldown). After transaction, true final-layer values are revealed so the player can discover outcomes like selling a masterpiece at 400% of assumed value.
+
+### `CarConfig` resource and run-time cargo capacity
+
+`cargo_scene.gd` uses hardcoded `MAX_SLOTS` and `MAX_WEIGHT`. Add a designer-authored `CarConfig` resource (`max_slots: int`, `max_weight: float`) referenced from `RunRecord` so cargo limits are data-driven and upgradeable.
+
+### Stamina in `RunRecord`
+
+`inspection_scene.gd` owns stamina as a local `_stamina` variable (`MAX_STAMINA = 8`, hardcoded). Move `stamina` and `max_stamina` onto `RunRecord` so they are data-driven and accessible across scenes. `inspection_scene` reads and writes through `GameManager.run_record`.
+
+---
+
+## Finished Todolist
+
+- [x] `GameManager` reset function: single call clears all run state (inspection_results, lot_result, cargo_items, run_result, re-populates current_lot)
+- [x] `GameManager.run_result` field: `{ sell_value, paid_price, net }` written by Block 06, read by Block 07
+- [x] Scene routing: all block transitions wired through GameManager methods (Block 02 → 03 → 04 → 05 → 06 → 07 → 02...)
+- [x] Fix: `rolled_price` decoupled from player `inspection_level` — use cached NPC-only estimate
+- [x] Fix: `KnowledgeManager.can_advance` context check — read active context from lot/location, not hardcoded `AUCTION` guard
+- [x] Fix: cache `npc_estimate` on `LotEntry` at creation — `get_opening_bid()` and `_rolled_price` both derive from it
+- [x] Fix: pass `lot_data.veiled_chance` into `ItemEntry.create()` in `LotEntry.create`
+- [x] `LotEntry`: replace `demand_factor` with `price_variance` (range ~1.0); pure per-run noise multiplier with no demand semantics
+- [x] `LotEntry`: extract `get_rolled_price()` from `auction_scene.gd`; add `price_floor_factor` / `price_ceiling_factor` to `LotData` as hard bounds on rolled price
+- [x] Inspection scene: add Skip button alongside existing Pass
+- [x] Condition system: add `condition: float` to `ItemEntry`; add `required_condition: float` to `LayerUnlockAction`; add HOME repair action
+- [x] Inspection action reworked: `ActionPopup` shows Potential (current / max inspect level) and Condition inspect — no direct layer unlock during inspection; layer index is read-only in-run
+- [x] Layer advancement locked to HOME and AUTO (veil only) — `ActionContext.AUCTION` removed from valid advance contexts
+- [x] `ItemEntry`: centralise condition colors (`condition_color`, `condition_inspect_color`), price colors (`PRICE_COLOR`, `PRICE_UNKNOWN_COLOR`, `price_color`), and `current_value` / `current_value_label` — all display logic lives in `ItemEntry`, UI rows only read properties
+- [x] `ItemData`: add `rarity: int` field — used as lot-draw filter only, not displayed
+- [x] Move stamina (`stamina`, `max_stamina`) from `inspection_scene.gd` locals into `RunRecord`
+
+## Soon
+- [ ] Item pool(rarity) and veild chance in LotData
+- [ ] Location scene (pre-auction): browse multiple lots per warehouse visit; per-location maintenance cost
+
+- [ ] Sell scene: select items, set price per tier (±10% / ±50% / ±100%), NPC evaluates total only; reveal true value after transaction; merchant lock on repeated max-ask
+
+- [ ] `price_estimate` precision tied to Knowledge level: estimate shown as a range whose width narrows as category knowledge increases; `get_known_condition_multiplier` upper/lower bounds derived from knowledge level rather than
+- [ ] `KnowledgeManager` real implementation: per-category knowledge levels, persisted across runs
+- [ ] `KnowledgeManager`: add Perk registry and Knowledge (soft buff) accumulation interfaces alongside existing Skill registry
+- [ ] Designer tooling: YAML fork-tree → SQLite → `.tres` pipeline (Python script)
+- [ ] Pawn shop merchant: `MerchantData` resource with buy rate range (0.4–0.6× true value), buys all item types
+- [ ] Basic specialist merchant: `MerchantData` with category/super_category filter, higher rate for matched items
+    - Match (category + interested): × 1.5–2.0
+    - Same super_cate gory, different category: × 0.8
+    - Uninteresting to merchant: × 0.8
+    - Worst case (different super_category + uninteresting): 1.5 × 0.8 × 0.8 = 0.96 — still above pawn shop floor
+- [ ] Persistent run-to-run state: gold balance, knowledge levels, van upgrades (minimal save data)
+
+## Later
+- [ ] HOME scene (first pass): perform HOME-context `LayerUnlockAction` advances and repair actions; replace `stamina_cost` with `time_cost: float` on `LayerUnlockAction` when HOME is implemented
+hardcoded
+- [ ] `CarConfig` resource: `max_slots`, `max_weight`; referenced from `RunRecord`; replaces hardcoded constants in `cargo_scene.gd`
+- [ ] Split `GameManager` into `RunData` (single-run state) and `SaveData` (persistent meta-layer)
+    - `RunData` extraction takes priority — `SaveData` deferred until meta systems exist
+- [ ] Full merchant variant system: aggressive factor, NPC personality affecting bid behaviour
+- [ ] Reputation system: tracked per merchant/faction, degrades on scam detection, affects prices and access
+- [ ] Scam flow: player can knowingly sell a fake; outcome branches (safe / caught / reputation hit)
+- [ ] Own shop: player lists items, sets price, sell frequency scales with price vs. market rate (~0.8–1.5× true value)
+- [ ] Expert network: appraisers, restorers, contacts unlockable and callable between runs
+- [ ] Museum / collection donations: alternative to selling, builds prestige track
