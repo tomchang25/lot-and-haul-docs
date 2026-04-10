@@ -19,7 +19,8 @@ hub
            └── [all lots passed / leave]
                 └── cargo
                      └── run_review
-                          └── hub        RunRecord cleared here
+                          └── day_summary_scene
+                               └── hub   RunRecord cleared before navigation
 ```
 
 Run state lives on `RunManager.run_record: RunRecord` from warehouse entry through run review.
@@ -92,6 +93,7 @@ Block 02 — player spends stamina to inspect items in the current lot.
 - `RunManager.run_record.actions_remaining` — decremented per action
 - `entry.potential_inspect_level` — incremented by Inspect Potential
 - `entry.condition_inspect_level` — incremented by Inspect Condition
+- `entry.layer_index` — set to 1 by X-Ray Scan (via `entry.unveil()`)
 
 ### Stamina and action limits
 
@@ -102,12 +104,11 @@ Block 02 — player spends stamina to inspect items in the current lot.
 
 ### Actions
 
-Both actions cost 2 SP and 1 from `actions_remaining`.
-
-| Action            | Cost | Eligibility                                  | Effect                         |
-| ----------------- | ---- | -------------------------------------------- | ------------------------------ |
-| Inspect Potential | 2 SP | `potential_inspect_level < 2` and not veiled | `potential_inspect_level += 1` |
-| Inspect Condition | 2 SP | `is_condition_inspectable()`                 | `condition_inspect_level += 1` |
+| Action            | Cost | Eligibility                                                   | Effect                                      |
+| ----------------- | ---- | ------------------------------------------------------------- | ------------------------------------------- |
+| Inspect Potential | 2 SP | `potential_inspect_level < 2` and not veiled                  | `potential_inspect_level += 1`              |
+| Inspect Condition | 2 SP | `is_condition_inspectable()`                                  | `condition_inspect_level += 1`              |
+| X-Ray Scan        | 3 SP | `is_veiled()` and `KnowledgeManager.has_perk("xray_inspect")` | `entry.unveil()` + category points (REVEAL) |
 
 `is_condition_inspectable()` returns false when: veiled, `condition_inspect_level >= 2`,
 or level is 1 and `condition < 0.3` (too damaged to read further).
@@ -129,22 +130,22 @@ or level is 1 and `condition < 0.3` (too damaged to read further).
 | 1     | `"Poor"` (condition < 0.3) or `"Common"` (≥ 0.3) |
 | 2     | `"Poor"` / `"Fair"` / `"Good"` / `"Excellent"`   |
 
-Layer advancement is not available in the warehouse. `layer_index` is read-only during inspection.
+Layer advancement (beyond unveil) is not available in the warehouse. `layer_index` changes only via X-Ray unveil during inspection.
 
 ### ActionPopup (`game/inspection/action_popup/`)
 
 Appears below the clicked `ItemCard`.
 
-- **Inspect Potential** and **Inspect Condition** buttons
-- **Cancel** button
-- Button text is dynamic: shows `"— 2 SP"` cost, or `"Potential: Max"`, `"Condition: Veiled"`,
-  `"Condition: Too Damaged"` when ineligible
+- **Inspect Potential**, **Inspect Condition**, **X-Ray Scan**, and **Cancel** buttons
+- X-Ray button visible only when item is veiled; hidden entirely without the `xray_inspect` perk
+- Button text is dynamic: shows SP cost, or `"Potential: Max"`, `"Condition: Too Damaged"` when ineligible
 - Disabled buttons: alpha 0.45, non-interactive
 - Eligibility re-evaluated on every `refresh(entry)` call (after each action)
 
 ```gdscript
 const POTENTIAL_COST := 2   # SP
 const CONDITION_COST := 2   # SP
+const XRAY_COST := 3        # SP
 ```
 
 Dismissal: ESC / Cancel / click outside (opens new popup if clicked on another card).
@@ -156,7 +157,7 @@ One card per item in the inspection grid.
 ```gdscript
 func setup(entry: ItemEntry, ctx: ItemViewContext) -> void
 func refresh(changed: StringName = &"") -> void
-# Plays a color-flash tween on the field named by `changed` ("potential" or "condition").
+# Plays a color-flash tween on the field named by `changed` ("potential", "condition", or "unveil").
 ```
 
 Uses `ItemViewContext.for_inspection()` — all modes `RESPECT_INSPECT_LEVEL`.
@@ -172,7 +173,7 @@ Uses `ItemViewContext.for_inspection()` — all modes `RESPECT_INSPECT_LEVEL`.
 | ≥ 1                       | 1                         | `"$N – $M"` at band midpoint          |
 | ≥ 1                       | 2                         | `"$N – $M"` at precise band           |
 
-The range width narrows with higher `KnowledgeManager.get_mastery_rank()` for the item's super-category.
+The range width narrows with higher super-category rank (via `KnowledgeManager.get_price_range()`).
 
 ### Scene buttons
 
@@ -201,25 +202,23 @@ Footer:
 - **Total Estimate** — `$sum_min – $sum_max` across non-veiled items; appends `"+"` if any are veiled.
 - **Opening Bid** — `lot_entry.get_opening_bid()`. Must match Block 04 (both derive from cached `npc_estimate`).
 
-Buttons: **Back** (returns to Inspection) / **Enter Auction** (`GameManager.go_to_auction()`).
-
-No editing, sorting, or re-inspection from this screen.
+Buttons: **Enter Auction** → `GameManager.go_to_auction()`. **Back** → closes overlay.
 
 ---
 
 ## Auction (`game/auction/`)
 
-Block 04 — player watches a live bidding sequence and decides when to drop out.
+Block 04 — the lot is sold as a single bundle.
 
 ### Reads
 
-- `RunManager.run_record.lot_entry`
+- `RunManager.run_record.lot_entry` (npc_estimate, rolled_price, opening_bid)
 - `RunManager.run_record.lot_items`
 
 ### Writes
 
-- `RunManager.run_record.paid_price`
-- `RunManager.run_record.won_items` (appended — accumulates across lots)
+- `RunManager.run_record.paid_price` (set on resolution)
+- `RunManager.run_record.won_items` (appended on win)
 - `RunManager.run_record.last_lot_won_items` (set to this lot's won items)
 
 ### The core concept
@@ -314,7 +313,7 @@ Also serves as the "you lost" interstitial — routes immediately to location br
 
 ### Writes
 
-- `entry.layer_index` — set to 1 for any veiled items (layer_index == 0) on Reveal press
+- `entry.layer_index` — set to 1 for any veiled items via `entry.unveil()`
 - `entry.condition_inspect_level` — set to 2 for all items on Reveal press
 - `entry.potential_inspect_level` — set to 2 for all items on Reveal press
 
@@ -322,11 +321,11 @@ Also serves as the "you lost" interstitial — routes immediately to location br
 
 1. If `last_lot_won_items` is empty (lost or passed): immediately `GameManager.go_to_location_browse()`.
 2. Show all won items using `ItemViewContext.for_reveal()` — values initially obscured before Reveal.
-3. **Reveal** button: advance all veiled items to layer 1; force both inspect levels to 2; refresh all rows.
+3. **Reveal** button: advance all veiled items to layer 1 via `entry.unveil()`; force both inspect levels to 2; refresh all rows.
 4. **Continue** (shown after Reveal): `GameManager.go_to_location_browse()`.
 
 Layer 0 → 1 advance here is unconditional and bypasses `KnowledgeManager.can_advance()`.
-This is the only place layer 0 items are advanced in normal play.
+This is the only place layer 0 items are advanced in bulk during normal play (X-Ray unveils individual items during inspection).
 
 ---
 
@@ -380,20 +379,15 @@ Strict order, because future bank interest in `advance_days` must see the post-s
 2. **Register cargo into storage**: `SaveManager.register_storage_items(r.cargo_items)`.
 3. **Advance days**: `var summary := SaveManager.advance_days(r.location_data.travel_days)`.
    This deducts living cost, ticks active actions, and saves.
-4. **Layer run-specific fields onto the summary** so the panel can display them:
+4. **Layer run-specific fields onto the summary**:
    `summary.onsite_proceeds`, `summary.paid_price`, `summary.entry_fee`, `summary.fuel_cost`.
 5. **Clear run state**: `RunManager.clear_run_state()`.
-6. **Show summary popup** — instantiates `day_pass_popup.tscn` and calls `show_summary(summary)`.
-   On dismissal: `GameManager.go_to_hub()`.
-
-The run review scene also embeds a `DaySummaryPanel` directly in its layout, used as the
-in-page summary alongside the cargo item list. The popup on dismissal is the same widget.
+6. **Navigate to day summary**: `GameManager.go_to_day_summary(summary)`.
 
 ### Display
 
 - One `ItemRow` per cargo item using `ItemViewContext.for_run_review()` (`FORCE_TRUE_VALUE`, `SELL_PRICE`).
-- `DaySummaryPanel` shows the unified income/expenses/actions/net summary
-  (see `hub_home.md` § Day Pass System for the panel spec).
+- Cargo list wrapped in a `ScrollContainer` so long manifests scroll; column header stays pinned above.
 - **Continue** → the flow above.
 
 ---
@@ -403,12 +397,14 @@ in-page summary alongside the cargo item list. The popup on dismissal is the sam
 - [x] Warehouse entry: creates `RunRecord`, `compute_travel_costs()` locks `entry_fee` / `fuel_cost`
 - [x] Location browse: lot card, enter/pass flow, `browse_lots` sampling, `browse_index`
 - [x] Inspection: `potential_inspect_level` and `condition_inspect_level` actions; `ActionPopup`; `StaminaHud`; `ItemCard`
+- [x] Inspection: X-Ray Scan action (3 SP, unveils veiled items; gated by `xray_inspect` perk)
 - [x] List review overlay: total estimate and opening bid; both derive from `npc_estimate`
 - [x] Auction: `get_rolled_price()` via `npc_estimate * aggressive_lerp * price_variance`; NPC tick system; circle progression; debug overlay
-- [x] Reveal: layer-0 → 1 unconditional advance; inspect levels forced to 2; routes to location browse
+- [x] Reveal: layer-0 → 1 unconditional advance via `entry.unveil()`; inspect levels forced to 2; routes to location browse
 - [x] Cargo: 2-D grid (v2) — see `cargo.md`
 - [x] `RunRecord.entry_fee` / `fuel_cost` fields; `compute_travel_costs()` called from `create()`
-- [x] Run review: sale-side cash mutation → `advance_days(travel_days)` → `DaySummaryPanel` popup
+- [x] Run review: sale-side cash mutation → `advance_days(travel_days)` → `DaySummaryScene`
+- [x] Run review: cargo list in `ScrollContainer` with pinned column header
 - [x] `ItemViewContext` — per-stage display rules; no stage branching in UI components
 
 ## Soon
@@ -422,4 +418,3 @@ in-page summary alongside the cargo item list. The popup on dismissal is the sam
 - [ ] Intel system: pre-run tip-offs that narrow `rolled_price` range
 - [ ] Additional `rolled_price` factors: full NPC knowledge level system
 - [ ] Auction audio: confirm sound on player Bid via AudioManager
-- [ ] Inspection: X-ray action (5 SP, reveals an veiled item)

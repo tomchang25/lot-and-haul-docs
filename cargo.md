@@ -191,7 +191,7 @@ weight check.
 (e.g. original `max_slots = 30` → `6 × 5`).
 
 YAML field: `shape_id: <string>` (replaces `grid_size: <int>`).
-Python pipeline: `db_to_tres.py` `_build_category_tres()` outputs `shape_id` instead of `grid_size`.
+Python pipeline: `yaml_to_tres.py` `_build_category_tres()` outputs `shape_id` instead of `grid_size`.
 
 ---
 
@@ -207,7 +207,6 @@ Python pipeline: `db_to_tres.py` `_build_category_tres()` outputs `shape_id` ins
 - [x] Item rotation (Q / E keys)
 - [x] On-site sell at flat rate; proceeds written to `onsite_proceeds`
 - [x] `ItemRow` and `ItemRowTooltip` show Weight and Grid columns in cargo context
-- [Remove] Shipping option: unselected items can be shipped for a fee; damage chance on arrival revealed in run review
 
 ## Soon
 

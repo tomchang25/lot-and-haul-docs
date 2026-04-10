@@ -1,8 +1,7 @@
 # Knowledge
 
 The player's progression as a lot hunter, split across three independent pillars.
-This doc is the design spec for the full system; `_shared.md` describes the runtime API surface
-and `roadmap.md` tracks implementation order.
+This doc is the canonical design spec and implementation reference for the full knowledge system.
 
 ---
 
@@ -119,14 +118,6 @@ gates use category rank only (granular, item-specific) or skill (trained compete
 Mastery rank gates _skill upgrades_, which then gate layers — one level of indirection
 that reads as "experienced enough to be taught this."
 
-### Migration note
-
-The existing `KnowledgeManager.get_mastery_rank(super_category_id)` is what the new model
-calls `get_super_category_rank()`. The rename is **not** find-replace safe — every call
-site needs auditing. Sites that conceptually mean "experience in this discipline" become
-`get_super_category_rank()`; sites that mean "player level overall" become the new no-arg
-`get_mastery_rank()`. Most existing calls are the former.
-
 ---
 
 ## Skill
@@ -168,7 +159,7 @@ extends Resource
 @export var levels: Array[SkillLevelData] = []
 ```
 
-`.tres` files under `data/skills/`. Loaded into `KnowledgeManager._skill_registry` at
+`.tres` files under `data/tres/skills/`. Loaded into `KnowledgeManager._skill_registry` at
 `_ready()` alongside the perk registry.
 
 ### Persistence
@@ -185,7 +176,6 @@ Serialised to `user://save.json` alongside `category_points` and `unlocked_perks
 ```gdscript
 func get_level(skill_id: String) -> int
 # Reads SaveManager.skill_levels.get(skill_id, 0).
-# Replaces the current stub that always returns 1.
 ```
 
 ### Upgrade flow
@@ -228,7 +218,7 @@ state but are kept distinct in the enum so the tooltip can say _which_ gate is b
 
 ### Hub Skill Panel
 
-A new scene reachable from Hub. List of skills, one row per skill:
+Scene reachable from Knowledge Hub. List of skills, one row per skill:
 
 - Display name + current level / max level
 - Next-level cash cost
@@ -256,8 +246,8 @@ extends Resource
 @export var description: String
 ```
 
-`.tres` files under `data/perks/`. Loaded into `KnowledgeManager._perk_registry` at
-`_ready()`. Status: implemented.
+`.tres` files under `data/tres/perks/`. Loaded into `KnowledgeManager._perk_registry` at
+`_ready()`.
 
 ### Persistence
 
@@ -272,6 +262,7 @@ var unlocked_perks: Array[String]
 func unlock_perk(perk_id: String) -> void   # appends + saves
 func has_perk(perk_id: String) -> bool
 func get_perk(perk_id: String) -> PerkData  # registry lookup; null if not found
+func get_all_perks() -> Array[PerkData]
 ```
 
 ### Acquisition
@@ -288,16 +279,16 @@ trigger:
 The trigger calls `KnowledgeManager.unlock_perk(id)`. Avoid a "perk shop" — that would
 collapse Perks into a second skill track and remove the discrete-opportunity meaning.
 
-### Catalog
+### Implementation list
 
 | Perk ID                        | Effect                                    | Check location                   | Example trigger            |
 | ------------------------------ | ----------------------------------------- | -------------------------------- | -------------------------- |
 | `onsite_sell_bonus`            | +X% cash when selling on-site in cargo    | cargo `ONSITE_SELL_PRICE` calc   | quest reward               |
 | `extra_grid_weight`            | +N grid cells across all vehicles         | `CarConfig` limits               | mechanic faction reward    |
 | `stamina_discount_inspect`     | Reduced SP cost for inspection actions    | inspection action cost           | found tool: magnifier set  |
-| `unlock_specialist_[category]` | Unlocks a specialist merchant             | hub merchant button              | introduction from NPC      |
+| `unlock_specialist_[category]` | Unlocks a specific specialist merchant    | hub merchant button              | introduction from NPC      |
 | `unlock_auction_[tier]`        | Unlocks a high-tier auction location      | location browse availability     | event ticket purchase      |
-| `cheap_fuel`                   | -X% on fuel cost                          | `RunRecord.compute_travel_costs` | fuel-station loyalty card  |
+| `cheap_fuel`                   | -X% on fuel cost component                | `RunRecord.compute_travel_costs` | fuel-station loyalty card  |
 | `xray_inspect`                 | New inspect action revealing hidden layer | inspect action menu              | found tool: portable X-ray |
 | `lockbox_unlock`               | Allows opening sealed treasure-box items  | reveal scene                     | found tool: lockpick set   |
 
@@ -370,19 +361,21 @@ func get_category_rank(category_id: String) -> int
 func get_super_category_rank(super_category_id: String) -> int
 func get_mastery_rank() -> int
 
-# ── Price range (existing, now reads super-category rank) ─
+# ── Price range (reads super-category rank) ──────────────
 func get_price_range(super_category_id: String, rarity: ItemData.Rarity, layer_depth: int = 0) -> Vector2
 func apply_market_research(entry: ItemEntry) -> void
 
 # ── Skill ────────────────────────────────────────────────
 func get_level(skill_id: String) -> int
 func get_skill(skill_id: String) -> SkillData
+func get_all_skills() -> Array[SkillData]
 func try_upgrade_skill(skill_id: String) -> UpgradeResult
 
 # ── Perk ─────────────────────────────────────────────────
 func unlock_perk(perk_id: String) -> void
 func has_perk(perk_id: String) -> bool
 func get_perk(perk_id: String) -> PerkData
+func get_all_perks() -> Array[PerkData]
 
 # ── Layer unlock check ───────────────────────────────────
 func can_advance(entry: ItemEntry, context: LayerUnlockAction.ActionContext) -> AdvanceCheck
@@ -441,6 +434,36 @@ to gate different things.
 
 ---
 
+## Knowledge Hub Navigation
+
+```
+Hub
+ └── Knowledge Hub (game/hub/knowledge_hub/)
+      ├── Mastery Panel — read-only: mastery rank, super-category ranks, category point progress
+      ├── Skill Panel — upgrade skills with cash; gated by mastery prerequisites
+      └── Perk Panel — read-only: unlocked vs locked perks
+```
+
+Back from any sub-panel returns to Knowledge Hub. Back from Knowledge Hub returns to Hub.
+
+---
+
+## Disabled-Reason Tooltips
+
+`AdvanceCheckLabel` (`game/knowledge/advance_check_label.gd`) — static helper mapping
+`AdvanceCheck` values to player-facing strings:
+
+- `OK` → `""` (button enabled)
+- `NO_ACTION` → `"Cannot advance further"`
+- `WRONG_CONTEXT` → `"Must be performed at home"`
+- `INSUFFICIENT_CATEGORY_RANK` → `"Need <category> rank <N>"`
+- `INSUFFICIENT_SKILL` → `"Need <skill> level <N>"`
+- `MISSING_PERK` → `"Requires perk: <perk name>"`
+
+Used by Storage scene Unlock button and any future gated UI.
+
+---
+
 ## Implementation Order
 
 Refactor first, feature second, polish third. Each group lands as one PR; do not split
@@ -457,7 +480,7 @@ within a group.
 ### Group B — Skill plumbing
 
 4. `SaveManager.skill_levels: Dictionary` field + serialise/deserialise.
-5. `KnowledgeManager.get_level()` reads from the dict (drop the `return 1` stub).
+5. `KnowledgeManager.get_level()` reads from the dict.
 6. `SkillLevelData` resource. `SkillData` gains `levels: Array[SkillLevelData]`.
 7. `KnowledgeManager._skill_registry` + `_load_skill_registry()` mirroring perks.
 
@@ -467,7 +490,7 @@ within a group.
    `required_perk_id: String`.
 9. `can_advance()` returns `AdvanceCheck` enum, not bool. Update every caller
    (~2–3 sites) to compare against `AdvanceCheck.OK` or switch on the enum for tooltips.
-10. YAML schema (`data/_yaml/*.yaml`) and `dev/tools/db_to_tres.py` updated for the two
+10. YAML schema (`data/yaml/*.yaml`) and `yaml_to_tres.py` updated for the two
     new fields. Existing `unlock_action:` blocks keep working — both fields default to
     "no gate."
 
@@ -479,14 +502,8 @@ within a group.
 
 ### Group E — Visibility
 
-13. Hub Knowledge Panel (read-only) showing:
-    - Per-category points and rank
-    - Per-super-category rank
-    - Global mastery rank
-    - Per-skill level
-    - Unlocked perks
-14. Tooltip / disabled-reason strings on every gated UI: storage Unlock button, hub
-    merchant buttons, future inspect action menu. Each surfaces which pillar is blocking.
+13. Knowledge Hub with Mastery, Skill, and Perk sub-panels.
+14. Tooltip / disabled-reason strings on every gated UI via `AdvanceCheckLabel`.
 
 ### Group F — Content hooks
 
@@ -495,25 +512,27 @@ within a group.
     threshold) so the perk system has a reachable path.
 17. Author initial perks with real effects on play.
 
----、
+---
 
 ## Status
 
 - [x] `category_points` storage + accumulation
 - [x] `get_category_rank()`
-- [x] `get_mastery_rank(super_id)` (currently misnamed — is super-category rank)
+- [x] `get_super_category_rank()` (renamed from old `get_mastery_rank(super_id)`)
+- [x] `get_mastery_rank()` (new no-arg global sum)
 - [x] `get_price_range()` rarity-vs-rank curve
 - [x] `apply_market_research()`
-- [x] `PerkData` resource + registry + `unlock_perk` / `has_perk`
-- [x] `SkillData` resource (flat — no `levels` array yet)
-- [x] `LayerUnlockAction.required_skill` + `required_level`
-- [x] `can_advance()` (returns bool, no category-rank or perk gate)
+- [x] `PerkData` resource + registry + `unlock_perk` / `has_perk` / `get_all_perks`
+- [x] `SkillData` resource with `levels: Array[SkillLevelData]`
+- [x] `SaveManager.skill_levels` persistence + `get_level()` reads from dict
+- [x] `KnowledgeManager._skill_registry` + `_load_skill_registry()`
+- [x] `LayerUnlockAction` with full gate set: `required_skill`, `required_level`, `required_category_rank`, `required_perk_id`
+- [x] `can_advance()` returns `AdvanceCheck` enum with disabled-reason support
 - [x] Group A: mastery layer rename + global mastery rank
 - [x] Group B: skill persistence + `SkillLevelData`
-- [x] Group C: `LayerUnlockAction` gains category-rank and perk gates; `can_advance()` enum
+- [x] Group C: `LayerUnlockAction` gates + `can_advance()` enum
 - [x] Group D: `try_upgrade_skill()` + Hub Skill Panel
-- [x] Group E: Hub Knowledge Panel + disabled-reason tooltips
-- [x] Knowledge Scene Refactor
-- [x] skill content
-- [x] x-ray perk content
-- [ ] more perk content
+- [x] Group E: Knowledge Hub + Mastery/Skill/Perk panels + disabled-reason tooltips
+- [x] Skill content authored
+- [x] X-Ray perk content (`xray_inspect`) + `ItemEntry.unveil()` consolidation
+- [ ] More perk content and acquisition triggers

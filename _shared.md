@@ -7,15 +7,15 @@ No block scene depends on another block's scene; they all depend on the shared t
 
 ## Autoloads
 
-| Autoload           | File                                   | Role                                                                                                                                             |
-| ------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `GameManager`      | `global/autoload/game_manager/`        | Scene transitions only. All `go_to_*()` methods. Does not hold run state.                                                                        |
-| `RunManager`       | `global/autoload/run_manager.gd`       | Holds `run_record: RunRecord`. Null between runs.                                                                                                |
-| `SaveManager`      | `global/autoload/save_manager.gd`      | Persistent cross-run data: cash, storage, category points, perks.                                                                                |
-| `KnowledgeManager` | `global/autoload/knowledge_manager.gd` | Three knowledge pillars: category mastery (passive), skill levels (trained), perk registry (granted). Also price ranges and layer unlock checks. |
-| `ItemRegistry`     | `global/autoload/item_registry/`       | Lookup table for all `ItemData` resources; super-category reverse index.                                                                         |
-| `AudioManager`     | `global/autoload/audio_manager/`       | Audio bus wrappers and event types.                                                                                                              |
-| `EventBus`         | `global/autoload/event_bus/`           | Cross-scene signal bus.                                                                                                                          |
+| Autoload           | File                                   | Role                                                                                                                                                                              |
+| ------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GameManager`      | `global/autoload/game_manager/`        | Scene transitions only. All `go_to_*()` methods. Holds `_pending_day_summary` for inter-scene data passing. Does not hold run state.                                              |
+| `RunManager`       | `global/autoload/run_manager.gd`       | Holds `run_record: RunRecord`. Null between runs.                                                                                                                                 |
+| `SaveManager`      | `global/autoload/save_manager.gd`      | Persistent cross-run data: cash, storage, category points, skill levels, perks.                                                                                                   |
+| `KnowledgeManager` | `global/autoload/knowledge_manager.gd` | Three knowledge pillars: category mastery (passive), skill levels (trained), perk registry (granted). Also price ranges and layer unlock checks. See `knowledge.md` for full API. |
+| `ItemRegistry`     | `global/autoload/item_registry/`       | Lookup table for all `ItemData` resources; super-category reverse index.                                                                                                          |
+| `AudioManager`     | `global/autoload/audio_manager/`       | Audio bus wrappers and event types.                                                                                                                                               |
+| `EventBus`         | `global/autoload/event_bus/`           | Cross-scene signal bus.                                                                                                                                                           |
 
 ---
 
@@ -145,6 +145,11 @@ func is_at_final_layer() -> bool
 func is_condition_inspectable() -> bool
 # Returns false when: veiled, condition_inspect_level >= 2,
 # or level == 1 and condition < 0.3 (too damaged to read further).
+
+func unveil() -> void
+# Advances a veiled item (layer 0) to layer 1 and recalculates knowledge ranges
+# at the new layer depth. Only accepts new ranges if the total spread is tighter.
+# Shared by reveal scene, X-Ray inspect action, and any future unveil caller.
 ```
 
 ### Advancing a layer
@@ -316,33 +321,36 @@ Inline sub-resource inside `ItemData`, or standalone `.tres` under `data/identit
 
 ### `LayerUnlockAction` (`data/_definitions/layer_unlock_action.gd`)
 
-```gdscript
-enum ActionContext { AUTO, AUCTION, HOME }
+See `knowledge.md` for the full resource definition, gate fields, and `can_advance()` enum.
 
-@export var context: ActionContext
-@export var stamina_cost: int           # ignored when context is AUTO
-@export var required_skill: SkillData  # null = no prerequisite
-@export var required_level: int        # ignored when required_skill is null
-@export var required_condition: float  # minimum condition value to perform this action
+```gdscript
+enum ActionContext { AUTO, HOME }
 ```
 
-**ActionContext semantics:**
-
-| Value     | Meaning                                                                                                                                   |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `AUTO`    | Not used for player actions. Present for schema completeness on layer-0 definitions; actual 0→1 advance is handled in `reveal_scene.gd`.  |
-| `AUCTION` | Layer advance at auction lot preview. Checked by `KnowledgeManager.can_advance()` but currently no AUCTION-context unlocks exist in data. |
-| `HOME`    | Requires home workshop. Checked in `storage_scene.gd`.                                                                                    |
+| Value  | Meaning                                                                                                                                  |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTO` | Not used for player actions. Present for schema completeness on layer-0 definitions; actual 0→1 advance is handled in `reveal_scene.gd`. |
+| `HOME` | Requires home workshop. Checked in `storage_scene.gd`.                                                                                   |
 
 ### `SkillData` (`data/_definitions/skill_data.gd`)
 
 ```gdscript
 @export var skill_id: String
 @export var display_name: String
-@export var max_level: int
+@export var levels: Array[SkillLevelData] = []
 ```
 
-`.tres` files under `data/skills/`.
+`.tres` files under `data/tres/skills/`. See `knowledge.md` for full spec.
+
+### `PerkData` (`data/_definitions/perk_data.gd`)
+
+```gdscript
+@export var perk_id: String
+@export var display_name: String
+@export var description: String
+```
+
+`.tres` files under `data/tres/perks/`. See `knowledge.md` for perk list and acquisition model.
 
 ### `LotData` (`data/_definitions/lot_data.gd`)
 
@@ -373,24 +381,15 @@ enum ActionContext { AUTO, AUCTION, HOME }
 @export var display_name: String
 @export var grid_columns: int
 @export var grid_rows: int
-@export var extra_slot_count: int
+@export var max_weight: float
 @export var stamina_cap: int
-@export var travel_cost: int
+@export var fuel_cost_per_day: int = 0
+@export var extra_slot_count: int = 0
 
 func total_slots() -> int   # grid_columns * grid_rows
 ```
 
 `.tres` files under `data/cars/`. `SaveManager.active_car_id` points to the active config.
-
-### `PerkData` (`data/_definitions/perk_data.gd`)
-
-```gdscript
-@export var perk_id: String
-@export var display_name: String
-@export var description: String
-```
-
-`.tres` files under `data/perks/`. Loaded into `KnowledgeManager._perk_registry` at `_ready()`.
 
 ---
 
@@ -402,6 +401,8 @@ Persists to `user://save.json`.
 
 ```gdscript
 var category_points: Dictionary   # category_id → int
+var skill_levels: Dictionary      # skill_id → int (default 0)
+var unlocked_perks: Array[String]
 var cash: int
 var active_car_id: String         # default "van_basic"
 var storage_items: Array          # Array[ItemEntry]; deserialized on load
@@ -409,7 +410,6 @@ var current_day: int
 var max_concurrent_actions: int   # default 2; base value, can be raised by perks
 var next_entry_id: int            # monotonically increasing; never reset or reused
 var active_actions: Array         # Array of plain Dictionaries; see ActiveActionEntry
-var unlocked_perks: Array[String]
 ```
 
 ### Key methods
@@ -421,6 +421,8 @@ func load_active_car() -> CarConfig
 func register_storage_item(entry: ItemEntry) -> void
 # Assigns entry.id = next_entry_id, increments next_entry_id, appends, saves.
 func register_storage_items(entries: Array[ItemEntry]) -> void
+func advance_days(n: int) -> DaySummary
+# Deducts living cost, ticks active actions, returns a summary of what happened.
 ```
 
 ### Serialised ItemEntry fields
@@ -452,62 +454,23 @@ Serialised in `SaveManager.active_actions` as plain Dictionaries:
 { "action_type": "market_research", "item_id": 4, "days_remaining": 2 }
 ```
 
-Note: currently `active_actions` is populated but the Day Pass processing loop (`apply_effect()`)
-is not yet wired. See `hub_home.md`.
+---
+
+## DaySummary (`game/_shared/day_summary/day_summary.gd`)
+
+Value object returned by `SaveManager.advance_days()`. Read by `DaySummaryScene`.
+
+Fields: `start_day`, `end_day`, `days_elapsed`, `onsite_proceeds`, `paid_price`,
+`entry_fee`, `fuel_cost`, `living_cost`, `completed_actions`, `net_change`,
+`has_run_data()`.
 
 ---
 
-## KnowledgeManager (`global/autoload/knowledge_manager.gd`)
+## DaySummaryScene (`game/day_summary/day_summary_scene.gd`)
 
-### Category points and mastery
-
-```gdscript
-enum KnowledgeAction {
-    POTENTIAL_INSPECT, CONDITION_INSPECT, REVEAL, APPRAISE, REPAIR, SELL
-}
-
-func add_category_points(category_id: String, rarity: Rarity, action: KnowledgeAction) -> void
-# Gain = BASE_MASTERY[action] * (rarity + 1). Accumulated in SaveManager.category_points.
-
-func get_category_rank(category_id: String) -> int
-# 0–5. Thresholds: 100 / 400 / 1600 / 6400 / 25600 points.
-
-func get_mastery_rank(super_category_id: String) -> int
-# Sum of get_category_rank() across all member categories.
-# Reads ItemRegistry super-category index.
-```
-
-### Price range
-
-```gdscript
-func get_price_range(super_category_id: String, rarity: Rarity, layer_depth: int = 0) -> Vector2
-# Returns (knowledge_min, knowledge_max) multipliers for ItemEntry.knowledge_min/max.
-# COMMON always returns (1.0, 1.0).
-# Higher rarities widen the range at low mastery; range narrows as rank improves.
-# layer_depth increases the effective mastery threshold — deeper layers are harder to know.
-```
-
-### Layer unlock check
-
-```gdscript
-func can_advance(entry: ItemEntry, context: LayerUnlockAction.ActionContext) -> bool
-# Checks: action not null, not at final layer, context matches, skill prerequisite met.
-# Stamina check is commented out pending time-based unlock implementation.
-
-func get_level(skill_id: String) -> int
-# Currently a stub returning 1 — full skill track deferred.
-# Target: read SaveManager.skill_levels[skill_id], default 0.
-# Skill levels are gained via training courses (separate from mastery rank);
-# see roadmap.md "Knowledge System — Three Pillars".
-```
-
-### Perk registry
-
-```gdscript
-func unlock_perk(perk_id: String) -> void   # appends to SaveManager.unlocked_perks + save()
-func has_perk(perk_id: String) -> bool
-func get_perk(perk_id: String) -> PerkData  # registry lookup; null if not found
-```
+Standalone scene displaying day-advancement results (economics, actions). Both the hub
+day-pass flow and the run-review flow navigate here via `GameManager.go_to_day_summary(summary)`.
+Continue button returns to hub via `GameManager.go_to_hub()`.
 
 ---
 
@@ -517,10 +480,37 @@ func get_perk(perk_id: String) -> PerkData  # registry lookup; null if not found
 func get_item(item_id: String) -> ItemData
 func get_items(rarity: Rarity, category_id: String) -> Array[ItemData]
 func get_categories_for_super(super_category_id: String) -> Array[String]
+func get_all_super_category_ids() -> Array[String]
+func get_super_category_display_name(super_category_id: String) -> String
+func get_category_display_name(category_id: String) -> String
 ```
 
 Builds a `super_category_id → Array[category_id]` reverse map at `_ready()`.
-Used by `KnowledgeManager.get_mastery_rank()` and `LotEntry._draw_item()`.
+
+---
+
+## Hub Navigation
+
+```
+Hub
+ ├── Knowledge Hub
+ │    ├── Mastery Panel (read-only display of ranks and category progress)
+ │    ├── Skill Panel (upgrade skills with cash; gated by mastery)
+ │    └── Perk Panel (read-only display of unlocked/locked perks)
+ ├── Storage (manage items, queue actions)
+ ├── Warehouse Entry → run loop
+ └── Day Pass → DaySummaryScene
+```
+
+---
+
+## Data Pipeline
+
+YAML source files → `yaml_to_tres.py` → `.tres` asset files. Reverse: `tres_to_yaml.py`.
+Deterministic UIDs via SHA-256 hashing. Script UIDs read from `.gd.uid` sidecar files.
+`yaml_stats.py` prints per-category statistics for design balancing (read-only).
+
+No database layer — the old SQLite pipeline has been removed.
 
 ---
 
@@ -532,29 +522,28 @@ Used by `KnowledgeManager.get_mastery_rank()` and `LotEntry._draw_item()`.
 - [x] `demand_factor` replaced with `price_variance` — pure per-run noise, no demand semantics
 - [x] `price_floor_factor` / `price_ceiling_factor` added to `LotData`; `get_rolled_price()` extracted from auction scene
 - [x] `ItemEntry` — full layer / inspect / condition / knowledge API; all display logic centralised
+- [x] `ItemEntry.unveil()` — shared unveil path for reveal scene, X-Ray action, and future callers
 - [x] `ItemViewContext` — per-stage display rules; eliminates stage branching in UI components
 - [x] `ItemData` with `identity_layers: Array[IdentityLayer]` and `category_data: CategoryData`
 - [x] `SuperCategoryData` resource; `ItemRegistry` super-category reverse index
 - [x] `CategoryData` with `shape_id` and `get_cells()`
 - [x] `ItemData.rarity` enum — lot-draw filter only, never displayed
-- [x] `LayerUnlockAction` with `context`, `required_skill`, `required_level`, `required_condition`
-- [x] `CarConfig` with `grid_columns`, `grid_rows`, `extra_slot_count`, `stamina_cap`
-- [x] `SaveManager` — all fields including `active_actions`, `unlocked_perks`, `next_entry_id`, `current_day`
+- [x] `LayerUnlockAction` with full gate set: `context`, `required_skill`, `required_level`, `required_condition`, `required_category_rank`, `required_perk_id`
+- [x] `CarConfig` with `grid_columns`, `grid_rows`, `extra_slot_count`, `stamina_cap`, `fuel_cost_per_day`, `max_weight`
+- [x] `SaveManager` — all fields including `active_actions`, `unlocked_perks`, `skill_levels`, `next_entry_id`, `current_day`
 - [x] `ActiveActionEntry` with `to_dict()` / `from_dict()`; stored as plain Dicts in SaveManager
-- [x] `KnowledgeManager` — category points, mastery rank, price range, perk registry
-- [x] `KnowledgeManager.get_level()` stub — always returns 1
 - [x] `LotData.super_category_weights` — super-category roll before category roll in `LotEntry._draw_item()`
+- [x] `DaySummaryScene` — standalone scene replacing old `DaySummaryPanel` + `DayPassPopup`
+- [x] Knowledge system — full three-pillar implementation (see `knowledge.md` for details)
+- [x] Data pipeline — direct YAML ↔ TRES with deterministic UIDs, no DB layer
 
 ## Soon
 
-- [ ] `KnowledgeManager.get_level()` — read from `SaveManager.skill_levels` dict (dedicated skill track, independent of mastery rank); currently all `required_level` gates pass trivially
-- [ ] `SaveManager.skill_levels: Dictionary` field + serialisation
-- [ ] `add_category_points()` call sites audit — confirm points are granted at every intended trigger: inspect, reveal, appraise, sell
-- [ ] Storage action tooltip: show reason why Unlock or Market Research is disabled
+- [ ] Multiple vehicle configurations selectable from Hub before a run
+- [ ] Pre-run cost preview on location browse (entry fee + fuel + travel days)
 
 ## Later
 
 - [ ] `TrainingCourseData` resource + course registry; hub Training button + course list UI
 - [ ] `ActiveActionEntry.ActionType.TRAINING` — training queues through `advance_days` chokepoint
-- [ ] `KnowledgeManager` persistence UI — show per-category mastery rank, per-skill level, and unlocked perks in Hub
-- [ ] Day Pass `apply_effect()` loop — see `hub_home.md`
+- [ ] More perk content and acquisition triggers
