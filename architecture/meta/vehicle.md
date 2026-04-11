@@ -10,7 +10,7 @@ Make the vehicle a meaningful cross-run investment: which car you drive should c
 
 - `SaveManager.active_car_id` — currently selected vehicle
 - `SaveManager.cash` — shop purchases
-- `CarConfig` instances under `data/tres/cars/*.tres` — all selectable and purchasable vehicles
+- `CarData` instances under `data/tres/cars/*.tres` — all selectable and purchasable vehicles
 
 ## Writes
 
@@ -24,7 +24,7 @@ On select: returns to `hub`. On purchase: stays in shop, refreshes owned/active 
 
 ### Data Definitions
 
-`CarConfig` — see `cargo.md` for the full field list. Already consumed by `RunRecord` (`stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`) and `cargo_scene` (`grid_columns`, `grid_rows`, `max_weight`, `extra_slot_count`). `SaveManager.load_active_car()` currently returns a single active car.
+`CarData` — see `cargo.md` for the full field list. Already consumed by `RunRecord` (`stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`) and `cargo_scene` (`grid_columns`, `grid_rows`, `max_weight`, `extra_slot_count`). `SaveManager.active_car` getter currently returns the single active car via `CarRegistry`.
 
 Fields still to add:
 
@@ -40,9 +40,9 @@ var owned_car_ids: Array[String] = []  # all cars the player has bought
 var active_car_id: String              # already exists; stays authoritative
 ```
 
-### Vehicle Selection Screen
+### Car Selection Screen
 
-`game/meta/vehicle_select/vehicle_select_scene.gd` + `.tscn` — _not yet implemented._ Reached from Hub before starting a run. Lists `owned_car_ids` with stat preview (grid dims, stamina, fuel cost, extra slots, max weight). Selecting sets `SaveManager.active_car_id` and returns to Hub.
+`game/meta/car_select/car_select_scene.gd` + `.tscn` — _not yet implemented._ Reached from Hub before starting a run. Lists `owned_car_ids` with stat preview (grid dims, stamina, fuel cost, extra slots, max weight). Selecting sets `SaveManager.active_car_id` and returns to Hub.
 
 ### Car Shop
 
@@ -50,11 +50,11 @@ var active_car_id: String              # already exists; stays authoritative
 
 ### Starter Car Authoring
 
-3–5 `CarConfig` `.tres` files under `data/tres/cars/` spanning a clear progression — starter van → box truck → semi, or similar — varying cargo grid dimensions, `stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`, and `max_weight`. The progression curve is the primary design lever; individual number tuning comes after the shop exists.
+3–5 `CarData` `.tres` files under `data/tres/cars/` spanning a clear progression — starter van → box truck → semi, or similar — varying cargo grid dimensions, `stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`, and `max_weight`. The progression curve is the primary design lever; individual number tuning comes after the shop exists.
 
 ### Run Integration Audit
 
-Cargo scene already reads grid dims from `car_config`, but `TEMP_GRID_COLS` / `TEMP_GRID_ROWS` are hardcoded constants on the cargo scene itself. Audit for other hardcoded constants that should become `CarConfig` fields before shipping multiple vehicles.
+Cargo scene already reads grid dims from `car_data`, but `TEMP_GRID_COLS` / `TEMP_GRID_ROWS` are hardcoded constants on the cargo scene itself. Audit for other hardcoded constants that should become `CarData` fields before shipping multiple vehicles.
 
 ## Notes
 
@@ -62,24 +62,24 @@ Cargo scene already reads grid dims from `car_config`, but `TEMP_GRID_COLS` / `T
 
 The pre-run cost preview built during Location work will already be wired for `fuel_cost_per_day × travel_days` against the current single active car. When the vehicle shop lands, fuel variety slots into the existing cost card without rework — as long as the selection screen lands before (or alongside) the shop so the "active car" plumbing exists.
 
-### Temp grid may or may not belong on `CarConfig`
+### Temp grid may or may not belong on `CarData`
 
 `TEMP_GRID_COLS` / `TEMP_GRID_ROWS` are currently global cargo scene constants. Open question whether larger vehicles should also have a larger temp staging area, or whether temp grid size is a fixed UX affordance unrelated to the vehicle. Decide during the audit step, not in advance.
 
 ## Done
 
-- [x] `CarConfig` resource with `car_id`, `display_name`, `grid_columns`, `grid_rows`, `max_weight`, `stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`
-- [x] `CarConfig` consumed by `RunRecord` (`stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`) and cargo scene (grid + trailer slots + weight)
-- [x] `SaveManager.load_active_car()` returns the active `CarConfig`
+- [x] `CarData` resource with `car_id`, `display_name`, `grid_columns`, `grid_rows`, `max_weight`, `stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`
+- [x] `CarData` consumed by `RunRecord` (`stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`) and cargo scene (grid + trailer slots + weight)
+- [x] `SaveManager.active_car` getter returns the active `CarData` via `CarRegistry`
 
 ## Soon
 
-- [ ] Author 3–5 starter `CarConfig` `.tres` files with distinct progression
+- [ ] Author 3–5 starter `CarData` `.tres` files with distinct progression
 - [ ] `SaveManager.owned_car_ids` persistence; append on purchase; migrate existing saves to include the starter car
-- [ ] `CarConfig.price` and `CarConfig.icon` fields
-- [ ] `game/meta/vehicle_select/` scene — stat preview, sets `active_car_id`
+- [ ] `CarData.price` and `CarData.icon` fields
+- [ ] `game/meta/car_select/` scene — stat preview, sets `active_car_id`
 - [ ] `game/meta/car_shop/` scene — browse purchasable cars, buy with cash
-- [ ] Audit cargo scene for hardcoded constants (`TEMP_GRID_COLS` / `TEMP_GRID_ROWS`, etc.) that should move to `CarConfig`
+- [ ] Audit cargo scene for hardcoded constants (`TEMP_GRID_COLS` / `TEMP_GRID_ROWS`, etc.) that should move to `CarData`
 
 ## Blocked
 
