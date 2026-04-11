@@ -211,7 +211,7 @@ Python pipeline: `yaml_to_tres.py` `_build_category_tres()` outputs `shape_id` i
 ## Soon
 
 - [ ] Multiple vehicle configurations selectable from Hub before a run
-- [ ] Vehicle upgrade reflected in grid dimensions and stamina cap
+- [ ] Vehicle types reflected in game run check
 
 ## Later
 
