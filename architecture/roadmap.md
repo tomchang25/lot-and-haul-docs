@@ -26,7 +26,7 @@ Hub provides read-only mastery/skills/perks display; Skill Panel allows upgrades
 
 **Immediate next:**
 
-- Pre-run cost preview on location browse (entry fee + fuel + travel days).
+- ~~Pre-run cost preview on location browse (entry fee + fuel + travel days).~~ *(moved to `location.md`)*
 - Selling side: pawn shop / merchant flow so cargo can actually convert to cash beyond on-site sell.
 
 ---
@@ -80,8 +80,8 @@ See `hub_home.md` for full specs on each. Summary:
 
 ## Post-Demo Targets
 
-- [ ] Location selection before entry: multiple warehouses with different item pools and risk profiles
-- [ ] Pre-run intel overlay: tip-off info purchasable at Hub; displayed in warehouse entry before the door opens
-- [ ] Pre-run cost preview: entry fee + fuel + travel days shown on `LotCard` or location selection screen
-- [ ] Arrival animation polish: vehicle pull-up, ambient sound, time-of-day lighting
-- [ ] Warehouse variant support: different exterior images and lot numbers per location
+- ~~Location selection before entry: multiple warehouses with different item pools and risk profiles~~ *(see `location.md`)*
+- ~~Pre-run intel overlay: tip-off info purchasable at Hub; displayed in warehouse entry before the door opens~~ *(see `location.md`)*
+- ~~Pre-run cost preview: entry fee + fuel + travel days shown on `LotCard` or location selection screen~~ *(see `location.md`)*
+- ~~Arrival animation polish: vehicle pull-up, ambient sound, time-of-day lighting~~ *(see `location.md`)*
+- ~~Warehouse variant support: different exterior images and lot numbers per location~~ *(see `location.md`; `lot_number` already on `LocationData`)*

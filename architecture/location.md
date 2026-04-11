@@ -12,7 +12,10 @@
 - [ ] Pre-run cost preview on location cards: `entry_fee + (fuel_cost_per_day × travel_days)` — requires reading active car
 - [ ] Rewire `warehouse_entry.tscn` to receive `location_data` from `RunManager` instead of `@export`
 - [ ] Location unlock gating (tied to progression — reputation, money, story flag, TBD)
-- [ ] Per-location display name, description, and art hook on `LocationData`
+- [ ] Per-location display name and description on `LocationData`
+- [ ] Location card art on `LocationData` — thumbnail/illustration for the selection screen
+- [ ] Warehouse exterior textures (closed/open) on `LocationData`; remove the hardcoded `ClosedTexture`/`OpenTexture` preloads in `warehouse_entry.gd` and read them from `run_record.location_data` instead
+- [ ] Arrival animation polish: vehicle pull-up, ambient sound, time-of-day lighting in `warehouse_entry` (currently only a texture fade)
 - [ ] Tip-off intel overlay: purchasable at Hub, stored on `RunRecord`, displayed in `warehouse_entry` before the door opens (depends on intel data model — likely `LocationIntel` resource)
 - [ ] Travel day consumption in calendar/time system (if/when calendar exists)
 

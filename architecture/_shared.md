@@ -540,7 +540,7 @@ No database layer — the old SQLite pipeline has been removed.
 ## Soon
 
 - [ ] Multiple vehicle configurations selectable from Hub before a run
-- [ ] Pre-run cost preview on location browse (entry fee + fuel + travel days)
+- ~~Pre-run cost preview on location browse (entry fee + fuel + travel days)~~ *(moved to `location.md`)*
 
 ## Later
 
