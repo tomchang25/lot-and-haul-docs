@@ -10,7 +10,7 @@ Make the vehicle a meaningful cross-run investment: which car you drive should c
 
 - `SaveManager.active_car_id` — currently selected vehicle
 - `SaveManager.cash` — shop purchases
-- `CarConfig` instances under `data/cars/*.tres` — all selectable and purchasable vehicles
+- `CarConfig` instances under `data/tres/cars/*.tres` — all selectable and purchasable vehicles
 
 ## Writes
 
@@ -46,11 +46,11 @@ var active_car_id: String              # already exists; stays authoritative
 
 ### Car Shop
 
-`game/meta/car_shop/car_shop_scene.gd` + `.tscn` — _not yet implemented._ Reached from Hub. Browses purchasable cars, previews stats, buys with cash. Inventory definition TBD: simplest option is "all cars in `data/cars/` that aren't owned"; gated progression can layer on later.
+`game/meta/car_shop/car_shop_scene.gd` + `.tscn` — _not yet implemented._ Reached from Hub. Browses purchasable cars, previews stats, buys with cash. Inventory definition TBD: simplest option is "all cars in `data/tres/cars/` that aren't owned"; gated progression can layer on later.
 
 ### Starter Car Authoring
 
-3–5 `CarConfig` `.tres` files under `data/cars/` spanning a clear progression — starter van → box truck → semi, or similar — varying cargo grid dimensions, `stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`, and `max_weight`. The progression curve is the primary design lever; individual number tuning comes after the shop exists.
+3–5 `CarConfig` `.tres` files under `data/tres/cars/` spanning a clear progression — starter van → box truck → semi, or similar — varying cargo grid dimensions, `stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`, and `max_weight`. The progression curve is the primary design lever; individual number tuning comes after the shop exists.
 
 ### Run Integration Audit
 
@@ -68,7 +68,7 @@ The pre-run cost preview built during Location work will already be wired for `f
 
 ## Done
 
-- [x] `CarConfig` resource with `grid_columns`, `grid_rows`, `max_weight`, `stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`
+- [x] `CarConfig` resource with `car_id`, `display_name`, `grid_columns`, `grid_rows`, `max_weight`, `stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`
 - [x] `CarConfig` consumed by `RunRecord` (`stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`) and cargo scene (grid + trailer slots + weight)
 - [x] `SaveManager.load_active_car()` returns the active `CarConfig`
 

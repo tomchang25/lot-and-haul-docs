@@ -39,7 +39,7 @@ func total_slots() -> int  # grid_columns * grid_rows
 
 `fuel_cost_per_day` is read by `RunRecord.compute_travel_costs()` and combined with `location_data.travel_days` to produce the run's total fuel cost. The legacy `travel_cost` field has been removed.
 
-`CargoShapes` — static class at `data/_definitions/cargo_shapes.gd`. Single `const SHAPES: Dictionary` mapping `String → Array[Vector2i]`. All cells are normalised so minimum x and y are 0.
+`CargoShapes` — static class at `data/definitions/cargo_shapes.gd`. Single `const SHAPES: Dictionary` mapping `String → Array[Vector2i]`. All cells are normalised so minimum x and y are 0.
 
 | Key    | Cells                                               | Description     |
 | ------ | --------------------------------------------------- | --------------- |
@@ -57,6 +57,9 @@ func total_slots() -> int  # grid_columns * grid_rows
 ```gdscript
 static func get_cells(shape_id: String) -> Array[Vector2i]
 # Returns SHAPES[shape_id]. Pushes an error and returns [] if key not found.
+
+static func rotate_cells(cells: Array[Vector2i], n: int) -> Array[Vector2i]
+# Rotates cells by n × 90° clockwise and re-normalises to (0, 0) origin.
 ```
 
 `CategoryData.shape_id: String` replaces the old `grid_size: int` field and is the per-category key into `CargoShapes`.
@@ -69,6 +72,7 @@ var _cargo_cells: Dictionary               # Vector2i → Panel
 var _temp_placement: Dictionary            # Vector2i → ItemEntry (temp cells)
 var _temp_cells: Dictionary                # Vector2i → Panel
 var _extra_slot_items: Array[ItemEntry]    # size = car_config.extra_slot_count
+var _item_rotations: Dictionary            # ItemEntry → int (per-item rotation memory)
 ```
 
 ### Cargo Scene
@@ -104,7 +108,7 @@ enum Phase {
 
 **Cancel** — right click while holding → item returns to its origin position, return to `IDLE`.
 
-**Rotate** — `Q` rotates held item 90° counter-clockwise; `E` rotates 90° clockwise. Rotation transforms the `get_cells()` output during placement preview and on confirm. Rotation state is per-drag, not persisted on `ItemEntry` or `CategoryData`.
+**Rotate** — `Q` rotates held item 90° counter-clockwise; `E` rotates 90° clockwise. Rotation transforms the `get_cells()` output during placement preview and on confirm. Rotation is not persisted on `ItemEntry` or `CategoryData`, but the scene remembers each item's last rotation in `_item_rotations` for the current session: the value is written back when an item is placed and restored when the same item is lifted again. `_item_rotations` is cleared on full reset.
 
 ### Placement Rules
 
@@ -154,7 +158,7 @@ Trailer slots are meant to be the "escape valve" for heavy oddball wins — cons
 - [x] `CarConfig.max_weight` enforced by cargo grid (`_would_exceed_weight`, pending-preview `StatsBar`, error label)
 - [x] 2-D grid drag-and-drop (`cargo_scene.gd` v2)
 - [x] Extra slots (`car_config.extra_slot_count`; `_extra_slot_items` array in scene)
-- [x] Item rotation (Q / E keys)
+- [x] Item rotation (Q / E keys); per-session memory via `_item_rotations`
 - [x] On-site sell at flat rate; proceeds written to `onsite_proceeds`
 - [x] `ItemRow` and `ItemRowTooltip` show Weight and Grid columns in cargo context
 

@@ -9,38 +9,41 @@ Make "where to run" a meaningful decision before "how to run": multiple warehous
 ## Reads
 
 - `SaveManager.load_active_car()` — needed on location cards to preview `fuel_cost_per_day × travel_days`
-- `RunManager.run_record.location_data` — downstream scenes (e.g. `warehouse_entry`) read this instead of an `@export`
+- `RunManager.run_record.location_data` — downstream scenes (e.g. `location_entry`) read this instead of an `@export`
 
 ## Writes
 
 - `RunManager.run_record` — `RunRecord.create(location_data, active_car)` at run start, which locks `entry_fee` and `fuel_cost` via `compute_travel_costs()`
 
-On confirm: `GameManager.go_to_warehouse_entry()`.
+On confirm: `GameManager.go_to_location_entry()`.
 
 ## Feature Intro
 
 ### Data Definitions
 
-`LocationData` — class at `data/definitions/location_data.gd`; instances at `data/locations/*.tres`.
+`LocationData` — class at `data/definitions/location_data.gd`; instances at `data/tres/locations/*.tres` (path exposed as `DataPaths.LOCATIONS_DIR`).
 
 ```gdscript
 @export var location_id: String
 @export var display_name: String
-@export var lot_pool: Array[LotData]
-@export var lot_number: int              # lots sampled per visit
+@export var description: String
 @export var entry_fee: int               # cash
 @export var travel_days: int             # days consumed by advance_days()
+@export var lot_number: int              # lots sampled per visit
+@export var lot_pool: Array[LotData]
 ```
 
-`RunRecord.create()` already consumes `LocationData`. Fields still to add: `display_name`, `description`, `card_art: Texture2D`, `exterior_closed: Texture2D`, `exterior_open: Texture2D`.
+`RunRecord.create()` already consumes `LocationData`. Fields still to add: `card_art: Texture2D`, `exterior_closed: Texture2D`, `exterior_open: Texture2D`.
 
 ### Location Select Scene
 
-`game/meta/location_select/location_select_scene.gd` + `.tscn` — _not yet implemented._ Sits between `hub` and `warehouse_entry`. Lists available `LocationData` instances as cards showing display name, flavor text, entry fee, travel days, lot count, and computed pre-run cost `entry_fee + (fuel_cost_per_day × travel_days)` against the active car. Selecting a card sets the chosen `LocationData` on `RunManager` and advances to `warehouse_entry`.
+`game/meta/location_select/location_select.gd` + `.tscn` — implemented. Sits between `hub` and `location_entry`. Scans `DataPaths.LOCATIONS_DIR` for `LocationData` `.tres` files and instantiates a `LocationCard` per entry. Cards currently show display name, description, entry fee, travel days, and lot count. On select, the scene constructs `RunManager.run_record = RunRecord.create(location, SaveManager.load_active_car())` and calls `GameManager.go_to_location_entry()`.
 
-### Warehouse Entry Rewire
+Still TODO on the card: computed pre-run cost `entry_fee + (fuel_cost_per_day × travel_days)` against the active car. The card does not currently read the active car at all.
 
-`game/run/warehouse/warehouse_entry.gd` + `.tscn` currently takes a hardcoded `location_data` via `@export` and preloads `ClosedTexture` / `OpenTexture` directly. Rewire to read `run_record.location_data` (set by the location select scene) and pull exterior textures from the `LocationData` resource instead of preloads.
+### Location Entry Rewire
+
+`game/run/location_entry/location_entry.gd` + `.tscn` already reads `RunManager.run_record.location_data` (asserts on entry that the Location Select screen set it). What remains: add `exterior_closed` / `exterior_open` textures to `LocationData` and have `location_entry` source them from the resource instead of playing the current placeholder modulate-alpha fade on a single `TextureRect`.
 
 ### YAML Authoring Pipeline
 
@@ -58,26 +61,28 @@ Location unlock could hang off reputation, money threshold, or story flags. Park
 
 ### Cargo ships first
 
-Cargo already reads `car_config.fuel_cost_per_day`, so the pre-run cost preview has everything it needs the moment the selection screen exists. No ordering dependency on other meta systems.
+Cargo already reads `car_config.fuel_cost_per_day`, so the pre-run cost preview has everything it needs the moment the card wiring pulls in the active car. No ordering dependency on other meta systems.
 
 ## Done
 
-- [x] `LocationData` resource with `lot_pool`, `lot_number`, `entry_fee`, `travel_days`
+- [x] `LocationData` resource with `lot_pool`, `lot_number`, `entry_fee`, `travel_days`, `display_name`, `description`
 - [x] `RunRecord.create(location_data, car_config)` consumes `LocationData` and locks travel costs via `compute_travel_costs()`
+- [x] `game/meta/location_select/` scene listing available locations with entry fee, travel days, lot count, and description; builds `RunRecord` on select and advances to `location_entry`
+- [x] `location_entry.tscn` reads `location_data` from `RunManager.run_record` instead of `@export`
 
 ## Soon
 
 - [ ] Extend YAML → `.tres` pipeline to author locations and their lot pools
 - [ ] Author 3–5 starter locations with distinct risk profiles, tuned primarily via `aggressive_lerp` ranges
-- [ ] `LocationData` fields: `display_name`, `description`, `card_art`, `exterior_closed`, `exterior_open`
-- [ ] `game/meta/location_select/` scene listing available locations with entry fee, travel days, lot count, flavor text, and pre-run cost preview
-- [ ] Rewire `warehouse_entry.tscn` to read `location_data` from `RunManager.run_record` instead of `@export`; source exterior textures from `LocationData`
-- [ ] Arrival polish in `warehouse_entry`: vehicle pull-up, ambient sound, time-of-day lighting (currently only a texture fade)
+- [ ] `LocationData` fields: `card_art`, `exterior_closed`, `exterior_open`
+- [ ] `LocationCard`: read active car and show pre-run cost preview (`entry_fee + fuel_cost_per_day × travel_days`)
+- [ ] Source exterior textures in `location_entry` from `LocationData` instead of the placeholder fade
+- [ ] Arrival polish in `location_entry`: vehicle pull-up, ambient sound, time-of-day lighting (currently only a texture fade)
 
 ## Blocked
 
 - [ ] Location unlock gating — blocked on progression model decision (reputation vs money vs story flag)
-- [ ] Tip-off intel overlay purchasable at Hub, stored on `RunRecord`, shown in `warehouse_entry` before the door opens — blocked on `LocationIntel` resource model
+- [ ] Tip-off intel overlay purchasable at Hub, stored on `RunRecord`, shown in `location_entry` before the door opens — blocked on `LocationIntel` resource model
 - [ ] Travel day consumption surfaced in calendar — blocked on calendar / time system
 
 ## Later

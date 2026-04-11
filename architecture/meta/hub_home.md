@@ -1,6 +1,6 @@
 # Hub & Home
 
-Meta block group in `game/meta/` — hub navigation, day-pass system, storage, and the deferred selling / merchant surfaces that hang off the hub.
+Meta block group in `game/meta/` — hub navigation, day-pass system, storage, pawn shop, and the deferred selling / merchant surfaces that hang off the hub.
 
 ## Goal
 
@@ -8,8 +8,9 @@ Be the calm between runs: the place where the player converts won cargo into cas
 
 ## Reads
 
-- `SaveManager.cash` / `current_day` — displayed in hub header
-- `SaveManager.storage_items` — storage scene source of truth
+- `SaveManager.cash` — displayed in hub header (Balance)
+- `SaveManager.storage_items` — hub header (item count) and storage scene source of truth
+- `KnowledgeManager.get_mastery_rank()` — hub header (Mastery Rank)
 - `GameManager.consume_pending_day_summary()` — `DaySummaryScene` input
 - `KnowledgeManager.can_advance()` — Storage Unlock button gating
 
@@ -18,7 +19,7 @@ Be the calm between runs: the place where the player converts won cargo into cas
 - `SaveManager.current_day` / `cash` / `active_actions` — via `SaveManager.advance_days()` on Day Pass
 - `SaveManager.storage_items` — mutated by Storage actions (queue research, queue unlock, sell)
 
-On Day Pass: `GameManager.go_to_day_summary(summary)`. On Knowledge: `GameManager.go_to_knowledge_hub()`. On Warehouse Entry: run loop.
+On Day Pass: `GameManager.go_to_day_summary(summary)`. On Knowledge: `GameManager.go_to_knowledge_hub()`. On Next Run: `GameManager.go_to_location_select()`. On Pawn Shop: `GameManager.go_to_pawn_shop()`. On Storage: `GameManager.go_to_storage()`.
 
 ## Feature Intro
 
@@ -32,30 +33,36 @@ func _do_day_pass() -> void:
     GameManager.go_to_day_summary(summary)
 ```
 
-Merchant-related resource extensions are listed under their respective H3s below (all deferred).
+Merchant-related resource extensions are listed under their respective H3s below.
 
 ### Hub Scene
 
 `game/meta/hub/hub_scene.gd` + `.tscn` — central navigation after each run and between day passes.
 
+Header displays Mastery Rank, Balance, and Storage item count (refreshed by `_refresh_display()` on `_ready()`).
+
 Buttons:
 
+- **Next Run** → `GameManager.go_to_location_select()`
+- **Storage** → `GameManager.go_to_storage()`
+- **Pawn Shop** → `GameManager.go_to_pawn_shop()`
+- **Van** → local `AcceptDialog` popup (`VanPopup`) showing van info
 - **Knowledge** → `GameManager.go_to_knowledge_hub()` (see `knowledge.md`)
-- **Storage** → storage scene
-- **Warehouse Entry** → run loop
-- **Day Pass** → `_do_day_pass()` → `DaySummaryScene`
+- **Day Pass** → `ConfirmationDialog` (`DayPassConfirm`) → on confirm, `_do_day_pass()` → `DaySummaryScene`
 
-Returning from `DaySummaryScene` via `GameManager.go_to_hub()` re-runs hub `_ready()`, which calls `_refresh_display()` to update balance and day counter.
+Returning from `DaySummaryScene` via `GameManager.go_to_hub()` re-runs hub `_ready()`, which calls `_refresh_display()` to update the header.
 
 ### Knowledge Hub Entry
 
-`game/meta/hub/knowledge_hub/knowledge_hub_scene.gd` + `.tscn` — navigation menu to three standalone sub-scenes: Mastery, Skills, Perks. Back returns to Hub. Full spec in `knowledge.md`.
+`game/meta/knowledge/knowledge_hub.gd` + `.tscn` — navigation menu to three standalone sub-scenes: Mastery, Skills, Perks. Back returns to Hub. Full spec in `knowledge.md`.
 
 ### Day Summary Scene
 
-`game/meta/day_summary/day_summary_scene.gd` + `.tscn` — standalone scene displaying day-advancement results. Used by both the hub Day Pass and the run-review continue flow. Reads a pending `DaySummary` from `GameManager.consume_pending_day_summary()`.
+`game/meta/day_summary/day_summary_scene.gd` + `.tscn` — standalone scene displaying day-advancement results. Used by both the hub Day Pass and the run-review continue flow. Reads a pending `DaySummary` from `GameManager.consume_pending_day_summary()`; if none is pending, returns to hub with a warning.
 
-Displays: day header, income group (visible only with run data), expenses (living cost, entry fee, fuel, lot price), completed actions list, net change, current balance. Continue → `GameManager.go_to_hub()`.
+`DaySummary` (in `game/shared/day_summary/day_summary.gd`) carries `start_day`, `end_day`, `days_elapsed`, run-specific fields (`onsite_proceeds`, `paid_price`, `entry_fee`, `fuel_cost`), universal `living_cost`, and `completed_actions`. `net_change` is a computed property; `has_run_data()` gates the income group.
+
+Displays: day header (`Day X` or `Day X → Day Y` when `days_elapsed > 1`), income group (visible only via `has_run_data()`), expenses (living cost, entry fee, fuel, paid price), completed actions list, net change, current balance. Continue → `GameManager.go_to_hub()`.
 
 ### Storage
 
@@ -64,22 +71,39 @@ Displays: day header, income group (visible only with run data), expenses (livin
 - Unlock button disabled with reason tooltip via `AdvanceCheckLabel.describe()` when `KnowledgeManager.can_advance()` returns non-OK.
 - Market Research button queues an `ActiveActionEntry`.
 
-### Specialist Merchant _(deferred)_
+### Pawn Shop
 
-_Not yet implemented._ Extends `MerchantData`:
+`game/meta/pawn_shop/` — general-rate selling surface reachable from the hub. Accepts all categories (pawn-shop behaviour), backed by a `MerchantData` resource with an empty `accepted_super_categories`.
+
+### Merchant Data (baseline)
+
+`data/definitions/merchant_data.gd` — shipped resource describing merchants. Fields:
 
 ```gdscript
-@export var accepted_super_categories: Array[SuperCategoryData]
-# Empty = pawn shop behaviour (accepts all). Non-empty = specialist.
+@export var merchant_id: String = ""
+@export var display_name: String = ""
 
-@export var special_orders: Array[ItemData]
-# Refreshed on Day Pass. Items here sell at 2× sell_price.
+# Super-categories sold at the specialist rate (1.2–1.5×).
+# Empty = pawn shop behaviour (accepts all at general rate).
+@export var accepted_super_categories: Array[SuperCategoryData] = []
 
-@export var required_perk_id: String
-# Empty = no gate. Non-empty = player must hold this perk to access.
+# Designer pool that special_orders is drawn from each Day Pass.
+@export var special_order_pool: Array[ItemData] = []
+@export var special_order_count: int = 2
+
+# Perk gate. Empty = no gate.
+@export var required_perk_id: String = ""
+
+# Runtime-only: items currently on special order. Not serialised;
+# regenerated each Day Pass by drawing special_order_count from the pool.
+var special_orders: Array[ItemData] = []
 ```
 
-Sell rates: in-specialty 1.2–1.5× `sell_price`, out-of-specialty 0.8×. Hub merchant button disabled if perk gate not met. `special_orders` refresh hooks into `SaveManager.advance_days()`.
+`.tres` files live under `data/merchants/`. The pawn shop is one such merchant with empty `accepted_super_categories` and empty `special_order_pool`.
+
+### Specialist Merchant _(deferred)_
+
+_Hub surfacing and sell-rate logic not yet implemented._ Data schema already exists on `MerchantData` (see above). Still to do: hub button gating on `required_perk_id`, sell-rate multipliers (in-specialty 1.2–1.5× `sell_price`, out-of-specialty 0.8×, specials at 2×), and the `special_orders` refresh hook inside `SaveManager.advance_days()`.
 
 ### Merchant Personality _(deferred)_
 
@@ -125,7 +149,7 @@ Before building the museum donation path, decide: what does prestige unlock or a
 
 ### Car system lives in `vehicle.md`
 
-Hub is where vehicle selection and the car shop _surface_, but the system doc is `vehicle.md`. This doc only references it.
+Hub is where vehicle selection and the car shop _surface_ (via the Van button / popup today), but the system doc is `vehicle.md`. This doc only references it.
 
 ### Reputation and scam flow must be designed together
 
@@ -133,13 +157,18 @@ Scam flow writes to reputation; severity thresholds determine outcome branches. 
 
 ## Done
 
-- [x] Hub scene with Knowledge / Storage / Warehouse Entry / Day Pass buttons
-- [x] `_do_day_pass()` → `SaveManager.advance_days(1)` → `DaySummaryScene`
+- [x] Hub scene with Next Run / Storage / Pawn Shop / Van / Knowledge / Day Pass buttons
+- [x] Hub header displaying Mastery Rank, Balance, and Storage item count
+- [x] Day Pass confirmation dialog → `_do_day_pass()` → `SaveManager.advance_days(1)` → `DaySummaryScene`
+- [x] Van info popup (`AcceptDialog`) reachable from hub
 - [x] Hub `_refresh_display()` on return from `DaySummaryScene`
-- [x] Knowledge Hub entry scene routing to Mastery / Skills / Perks sub-panels
-- [x] `DaySummaryScene` shared by hub day-pass and run-review flows; reads from `GameManager.consume_pending_day_summary()`
+- [x] Knowledge Hub entry scene at `game/meta/knowledge/knowledge_hub.{gd,tscn}` routing to Mastery / Skills / Perks sub-panels
+- [x] `DaySummaryScene` shared by hub day-pass and run-review flows; reads from `GameManager.consume_pending_day_summary()`, falls back to hub if empty
+- [x] `DaySummary` value object with `start_day` / `end_day` / `days_elapsed`, run fields, `living_cost`, `completed_actions`, computed `net_change`, and `has_run_data()` gate
 - [x] Storage scene with Market Research queue, Layer Unlock queue, sell
 - [x] Storage Unlock button disabled-reason tooltip via `AdvanceCheckLabel.describe()`
+- [x] Pawn Shop scene reachable from hub (`GameManager.go_to_pawn_shop()`)
+- [x] `MerchantData` resource with `accepted_super_categories`, `special_order_pool`, `special_order_count`, `required_perk_id`, and runtime `special_orders`
 
 ## Soon
 
@@ -155,7 +184,7 @@ _None._
 
 ## Later
 
-- [ ] Specialist Merchant — `MerchantData` extensions, sell-rate multipliers, `special_orders` refresh on `advance_days()`
+- [ ] Specialist Merchant — hub gating on `required_perk_id`, sell-rate multipliers, `special_orders` refresh on `advance_days()`
 - [ ] Merchant Personality — `personality_type` enum and `aggressive_factor`
 - [ ] Garage Sell scene modelled on `game/run/auction/`
 - [ ] Own Shop — player listings resolved inside `advance_days()`

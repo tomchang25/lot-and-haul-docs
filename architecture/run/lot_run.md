@@ -1,22 +1,22 @@
 # Lot Run
 
-Run block group in `game/run/` — everything from entering a warehouse to settling the result: warehouse entry, location browse, inspection, list review, auction, reveal, cargo, and run review.
+Run block group in `game/run/` — everything from entering a location to settling the result: location entry, lot browse, inspection, list review, auction, reveal, cargo, and run review. (Location selection itself lives under `game/meta/location_select/` since it happens out of run.)
 
 ## Goal
 
-Deliver one complete warehouse visit as a tight loop — arrive, browse lots, inspect, bid, reveal, pack, settle — where each stage writes to a single `RunRecord` and the player's decisions compound across the visit. Success is a run that feels like one continuous beat instead of eight disconnected scenes.
+Deliver one complete location visit as a tight loop — arrive, browse lots, inspect, bid, reveal, pack, settle — where each stage writes to a single `RunRecord` and the player's decisions compound across the visit. Success is a run that feels like one continuous beat instead of eight disconnected scenes.
 
 ## Reads
 
-- `RunManager.run_record: RunRecord` — run state from warehouse entry through run review
-- `SaveManager.load_active_car()` — consumed at `RunRecord.create()`
+- `RunManager.run_record: RunRecord` — run state from location entry through run review
+- `SaveManager.load_active_car()` — consumed by `location_select` when calling `RunRecord.create()`
 - `SaveManager.cash` — read by run review before sale-side mutation
 - `KnowledgeManager.has_perk("xray_inspect")` — gates X-Ray inspection action
 - `KnowledgeManager.get_price_range()` — narrows price estimate display
 
 ## Writes
 
-- `RunManager.run_record` — created in warehouse entry, mutated through every downstream scene, cleared at the end of run review
+- `RunManager.run_record` — created in `location_select` (meta), mutated through every downstream run scene, cleared at the end of run review
 - `SaveManager.cash` / `storage_items` / `current_day` / `active_actions` — mutated by run review via direct assignment + `SaveManager.advance_days()`
 
 On run review continue: `GameManager.go_to_day_summary(summary)` → eventually back to `hub`.
@@ -27,45 +27,53 @@ On run review continue: `GameManager.go_to_day_summary(summary)` → eventually 
 
 ```
 hub
- └── warehouse_entry                RunRecord created here
-      └── location_browse           lot selection loop
-           ├── [enter lot] ────────────────────────────────────┐
-           │    └── inspection + list_review (overlay)         │
-           │         └── auction                               │
-           │              └── reveal (won or passed)           │
-           │                   └── location_browse ◄──────────┘
-           └── [all lots passed / leave]
-                └── cargo
-                     └── run_review
-                          └── day_summary_scene
-                               └── hub  RunRecord cleared before nav
+ └── location_select              RunRecord created here (meta)
+      └── location_entry          arrival beat; asserts run_record exists
+           └── lot_browse         lot selection loop
+                ├── [enter lot] ────────────────────────────────────┐
+                │    └── inspection + list_review (overlay)         │
+                │         └── auction                               │
+                │              └── reveal (won or passed)           │
+                │                   └── lot_browse ◄────────────────┘
+                └── [all lots passed / leave]
+                     └── cargo
+                          └── run_review
+                               └── day_summary
+                                    └── hub  RunRecord cleared before nav
 ```
 
 ### Data Definitions
 
-`RunRecord` — class at `data/definitions/run_record.gd`; runtime instance lives on `RunManager.run_record`, not a `.tres`. Owns `location_data`, `car_config`, `browse_lots`, `browse_index`, `lot_entry`, `lot_items`, `won_items`, `last_lot_won_items`, `cargo_items`, `onsite_proceeds`, `paid_price`, `entry_fee`, `fuel_cost`, `stamina`, `max_stamina`, `actions_remaining`. `create(location_data, car_config)` calls `compute_travel_costs()` to lock `entry_fee` and `fuel_cost` for the entire run.
+`RunRecord` — class at `game/shared/run_record/run_record.gd`; runtime instance lives on `RunManager.run_record`, not a `.tres`. Owns `location_data`, `car_config`, `browse_lots`, `browse_index`, `lot_entry`, `lot_items`, `won_items`, `last_lot_won_items`, `cargo_items`, `onsite_proceeds`, `paid_price`, `net`, `entry_fee`, `fuel_cost`, `stamina`, `max_stamina`, `actions_remaining`. `create(location_data, car_config)` calls `compute_travel_costs()` to lock `entry_fee` and `fuel_cost` for the entire run.
 
 `ItemEntry` runtime fields touched by this system: `potential_inspect_level`, `condition_inspect_level`, `layer_index`, `paid_price`. See the item system doc for the full class.
 
-### Warehouse Entry
+### Location Select
 
-`game/run/warehouse/warehouse_entry.gd` + `.tscn` — run initialisation and atmosphere beat. No gameplay.
+`game/meta/location_select/location_select.gd` + `.tscn` — **meta** scene reached from Hub. Scans `DataPaths.LOCATIONS_DIR` for `LocationData.tres` files, builds one `LocationCard` per entry, and on card press:
 
-1. `RunManager.run_record = RunRecord.create(location_data, SaveManager.load_active_car())`.
-2. Display warehouse exterior; play two-frame closed → open animation.
-3. Advance automatically to `location_browse` on animation complete.
+1. `RunManager.run_record = RunRecord.create(card.get_location_data(), SaveManager.load_active_car())`.
+2. `GameManager.go_to_location_entry()`.
 
-`location_data` is currently an `@export` on the scene, hardcoded to a single warehouse. To be rewired by the Location system — see `location_and_lot.md`.
+This is where the run record is actually built — `location_entry` only consumes it.
 
-### Location Browse
+### Location Entry
 
-`game/run/location_browse/location_browse_scene.gd` + `.tscn` — browses the sampled lot list and serves as the hub between lots; reveal routes back here.
+`game/run/location_entry/location_entry.gd` + `.tscn` — run-side arrival beat. No gameplay, no input.
 
-1. On first entry: sample `browse_lots` from `location_data.lot_pool` if not yet populated.
-2. Display `LotCard` for `browse_lots[browse_index]` (lot N of total).
-3. **Enter** → `RunRecord.set_lot(LotEntry.create(browse_lots[browse_index]))`, advance to inspection.
-4. **Pass** → increment `browse_index`. If more lots remain, show next card; if exhausted, advance to cargo.
-5. **Leave early** → advance to cargo with whatever `won_items` are accumulated.
+1. Assert `RunManager.run_record` and `run_record.location_data` are non-null (Location Select must have built them).
+2. Play a placeholder fade tween on the `TextureRect` (per-location arrival visuals are a later block — see Blocked).
+3. On tween complete, call `GameManager.go_to_lot_browse()`.
+
+### Lot Browse
+
+`game/run/lot_browse/lot_browse_scene.gd` + `.tscn` — browses the sampled lot list and serves as the hub between lots; reveal routes back here.
+
+1. On first entry: sample `browse_lots` from `location_data.lot_pool` (shuffled, sliced to `location_data.lot_number`) if not yet populated, and set `browse_index = 0`.
+2. Build one `LotCard` per sampled lot in a horizontal container; mark the card at `browse_index` as active.
+3. **Enter** → `RunRecord.set_lot(LotEntry.create(browse_lots[browse_index]))`, increment `browse_index`, advance to inspection.
+4. **Pass** → increment `browse_index` and refresh the view. If `browse_index` has passed the end, show the cargo-entry state instead of a card.
+5. **Skip** (leave early) → `ConfirmationDialog` asks to skip remaining lots, then advances to cargo with whatever `won_items` are accumulated.
 
 ### Inspection
 
@@ -105,7 +113,7 @@ Price estimate (`entry.current_price_label`) derives from `active_layer().base_v
 | ≥ 1                       | 1                         | `"$N – $M"` at band midpoint          |
 | ≥ 1                       | 2                         | `"$N – $M"` at precise band           |
 
-Scene buttons: **Start Auction** opens the List Review overlay; **Pass / Skip** returns to `location_browse` after confirmation.
+Scene buttons: **Start Auction** opens the List Review overlay; **Pass / Skip** returns to `lot_browse` after confirmation.
 
 ### List Review
 
@@ -129,6 +137,10 @@ rolled_price    = clamp(raw, npc_estimate * price_floor_factor, npc_estimate * p
 opening_bid     = npc_estimate * lot_data.opening_bid_factor
 ```
 
+Both values are floored to `MIN_STEP` when the auction scene consumes them:
+`_rolled_price = max(lot.get_rolled_price(), MIN_STEP)`,
+`opening_bid   = max(lot.get_opening_bid(), MIN_STEP)`. This prevents degenerate single-step auctions on very low-value lots.
+
 NPC tick interval is progress-dependent:
 
 | Progress | `min_time`     | `max_time`     |
@@ -149,10 +161,11 @@ step = max(round(current_display_price * STEP_RATIO * step_multiplier), MIN_STEP
 
 Termination: once `current_display_price >= rolled_price`, the NPC timer stops and the next circle completion fires `_resolve()`.
 
-- **Won** (`_last_bidder == "player"`) — write `paid_price`, append to `won_items`, copy to `last_lot_won_items` → `GameManager.go_to_reveal()`.
-- **Lost or Passed** (`_last_bidder == "npc"` or Pass button) — `paid_price = 0`, no `won_items` added → `GameManager.go_to_reveal()`.
+- **Won** (`_last_bidder == "player"`) — `paid_price += _current_display_price`, `won_items += lot_items`, `last_lot_won_items = lot_items.duplicate()` → `GameManager.go_to_reveal()`. Note the additive `+=`: across a multi-lot run, `paid_price` is a running total. Same for `won_items`.
+- **Lost** (`_last_bidder == "npc"`) — no mutation at all. `paid_price` and `won_items` are unchanged; `last_lot_won_items` remains whatever `set_lot()` cleared it to (empty) → `GameManager.go_to_reveal()`.
+- **Passed** (player clicks Pass mid-auction) — `_on_pass_pressed` stops `_npc_timer`, kills `_circle_tween`, and jumps to reveal with no mutation. Same shape as Lost.
 
-Player actions: **Bid** adds `MIN_STEP` to `current_display_price`, sets `_last_bidder = "player"`, disables buttons until the next NPC tick, shortens the next interval. **Pass** kills the timer and circle tween and writes a loss result.
+Player actions during the tick loop: **Bid** adds `MIN_STEP` to `_current_display_price`, sets `_last_bidder = "player"`, disables both buttons until the next NPC tick, and sets `_shorten_next_npc_tick` so the next NPC interval is halved once. **Pass** terminates immediately as described above.
 
 Lot summary display is built from `lot_items` using `entry.display_name` and `entry.current_price_label`. Total: `$sum_min – $sum_max` across non-veiled items; appends `"+"` if any are veiled.
 
@@ -173,10 +186,10 @@ const PRICE_TWEEN_SEC := 0.3    # price label tween duration
 
 `game/run/reveal/reveal_scene.gd` + `.tscn` — shows won items and advances veiled items to layer 1 before cargo. Also serves as the "you lost" interstitial.
 
-1. If `last_lot_won_items` is empty (lost or passed): immediately `GameManager.go_to_location_browse()`.
+1. If `last_lot_won_items` is empty (lost or passed): immediately `GameManager.go_to_lot_browse()`.
 2. Show all won items using `ItemViewContext.for_reveal()` — values initially obscured before Reveal.
 3. **Reveal** button: advance all veiled items to layer 1 via `entry.unveil()`; force both inspect levels to 2; refresh all rows.
-4. **Continue** (shown after Reveal): `GameManager.go_to_location_browse()`.
+4. **Continue** (shown after Reveal): `GameManager.go_to_lot_browse()`.
 
 Layer 0 → 1 advance here is unconditional and bypasses `KnowledgeManager.can_advance()`. This is the only place layer 0 items are advanced in bulk during normal play — X-Ray unveils individual items during inspection.
 
@@ -204,6 +217,10 @@ Display: one `ItemRow` per cargo item using `ItemViewContext.for_run_review()` (
 
 ## Notes
 
+### `paid_price` and `won_items` accumulate across lots in a run
+
+`_resolve()` uses `+=` on both, not assignment. Across a multi-lot run the record holds a running total of every lot the player has won, and `last_lot_won_items` is the single-lot slice reveal needs. Any code that treats `paid_price` as "the price of the current lot" is wrong — use `last_lot_won_items` + their paid amounts if you need per-lot granularity. This also means the lost/passed paths deliberately do **nothing**: resetting to zero would wipe earlier wins in the same run.
+
 ### `rolled_price` must never leak into playtest UI
 
 The debug overlay is gated to debug builds on purpose — exposing the true price during a playtest collapses the "stay or walk" decision into arithmetic. Any new UI that touches auction state should be audited against this rule.
@@ -218,15 +235,16 @@ The debug overlay is gated to debug builds on purpose — exposing the true pric
 
 ## Done
 
-- [x] Warehouse entry: creates `RunRecord`, `compute_travel_costs()` locks `entry_fee` / `fuel_cost`
-- [x] Location browse: lot card, enter/pass flow, `browse_lots` sampling, `browse_index`
+- [x] Location select (meta): scans `DataPaths.LOCATIONS_DIR`, builds `LocationCard` per `LocationData`, creates `RunRecord` on pick
+- [x] Location entry: asserts `run_record` exists, plays placeholder fade, advances to lot browse
+- [x] `RunRecord`: `compute_travel_costs()` locks `entry_fee` / `fuel_cost` at `create()`
+- [x] Lot browse: lot cards, enter/pass/skip flow, `browse_lots` sampling, `browse_index` persistence
 - [x] Inspection: `potential_inspect_level` and `condition_inspect_level` actions; `ActionPopup`; `StaminaHud`; `ItemCard`
 - [x] Inspection: X-Ray Scan action (3 SP, unveils veiled items; gated by `xray_inspect` perk)
 - [x] List review overlay: total estimate and opening bid; both derive from `npc_estimate`
 - [x] Auction: `get_rolled_price()` via `npc_estimate * aggressive_lerp * price_variance`; NPC tick system; circle progression; debug overlay
-- [x] Reveal: layer-0 → 1 unconditional advance via `entry.unveil()`; inspect levels forced to 2; routes to location browse
+- [x] Reveal: layer-0 → 1 unconditional advance via `entry.unveil()`; inspect levels forced to 2; routes to lot browse
 - [x] Cargo: 2-D grid (v2) — see `cargo.md`
-- [x] `RunRecord.entry_fee` / `fuel_cost` fields; `compute_travel_costs()` called from `create()`
 - [x] Run review: sale-side cash mutation → `advance_days(travel_days)` → `DaySummaryScene`
 - [x] Run review: cargo list in `ScrollContainer` with pinned column header
 - [x] `ItemViewContext` — per-stage display rules; no stage branching in UI components
@@ -237,9 +255,9 @@ The debug overlay is gated to debug builds on purpose — exposing the true pric
 
 ## Blocked
 
-- [ ] Location browse: multiple location options selectable from Hub; pre-run cost preview (entry fee + fuel + days) — blocked on Location system (see `location_and_lot.md`)
+- [ ] Lot browse: pre-run cost preview (entry fee + fuel + days) on the Location Select cards — partial; full breakdown blocked on Location system polish (see `location_and_lot.md`)
 - [ ] Intel system: pre-run tip-offs that narrow `rolled_price` range — blocked on `LocationIntel` resource model
-- [ ] Warehouse entry: exterior textures sourced from `LocationData` — blocked on Location system rewire
+- [ ] Location entry: per-location arrival visuals/textures sourced from `LocationData` — placeholder fade only today
 
 ## Later
 
