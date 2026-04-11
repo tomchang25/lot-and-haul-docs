@@ -66,6 +66,13 @@ The pre-run cost preview built during Location work will already be wired for `f
 
 `TEMP_GRID_COLS` / `TEMP_GRID_ROWS` are currently global cargo scene constants. Open question whether larger vehicles should also have a larger temp staging area, or whether temp grid size is a fixed UX affordance unrelated to the vehicle. Decide during the audit step, not in advance.
 
+### Related
+
+Vintage-vehicle restoration (auction parts → assemble → sell at car shop, with
+select models becoming drivable) lives in its own doc: `vehicle_restoration.md`.
+That system is separate from the work-vehicle loop covered here and is not
+yet scheduled.
+
 ## Done
 
 - [x] `CarData` resource with `car_id`, `display_name`, `grid_columns`, `grid_rows`, `max_weight`, `stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`
