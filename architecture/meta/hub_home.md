@@ -1,0 +1,163 @@
+# Hub & Home
+
+Meta block group in `game/meta/` — hub navigation, day-pass system, storage, and the deferred selling / merchant surfaces that hang off the hub.
+
+## Goal
+
+Be the calm between runs: the place where the player converts won cargo into cash, spends cash on progression, and ticks the day forward. Success is a hub that frames every major meta system (knowledge, storage, selling, vehicles) without itself becoming a minigame.
+
+## Reads
+
+- `SaveManager.cash` / `current_day` — displayed in hub header
+- `SaveManager.storage_items` — storage scene source of truth
+- `GameManager.consume_pending_day_summary()` — `DaySummaryScene` input
+- `KnowledgeManager.can_advance()` — Storage Unlock button gating
+
+## Writes
+
+- `SaveManager.current_day` / `cash` / `active_actions` — via `SaveManager.advance_days()` on Day Pass
+- `SaveManager.storage_items` — mutated by Storage actions (queue research, queue unlock, sell)
+
+On Day Pass: `GameManager.go_to_day_summary(summary)`. On Knowledge: `GameManager.go_to_knowledge_hub()`. On Warehouse Entry: run loop.
+
+## Feature Intro
+
+### Data Definitions
+
+No resources owned by this block directly — Hub is a navigation surface over other systems' data. Runtime hook:
+
+```gdscript
+func _do_day_pass() -> void:
+    var summary := SaveManager.advance_days(1)
+    GameManager.go_to_day_summary(summary)
+```
+
+Merchant-related resource extensions are listed under their respective H3s below (all deferred).
+
+### Hub Scene
+
+`game/meta/hub/hub_scene.gd` + `.tscn` — central navigation after each run and between day passes.
+
+Buttons:
+
+- **Knowledge** → `GameManager.go_to_knowledge_hub()` (see `knowledge.md`)
+- **Storage** → storage scene
+- **Warehouse Entry** → run loop
+- **Day Pass** → `_do_day_pass()` → `DaySummaryScene`
+
+Returning from `DaySummaryScene` via `GameManager.go_to_hub()` re-runs hub `_ready()`, which calls `_refresh_display()` to update balance and day counter.
+
+### Knowledge Hub Entry
+
+`game/meta/hub/knowledge_hub/knowledge_hub_scene.gd` + `.tscn` — navigation menu to three standalone sub-scenes: Mastery, Skills, Perks. Back returns to Hub. Full spec in `knowledge.md`.
+
+### Day Summary Scene
+
+`game/meta/day_summary/day_summary_scene.gd` + `.tscn` — standalone scene displaying day-advancement results. Used by both the hub Day Pass and the run-review continue flow. Reads a pending `DaySummary` from `GameManager.consume_pending_day_summary()`.
+
+Displays: day header, income group (visible only with run data), expenses (living cost, entry fee, fuel, lot price), completed actions list, net change, current balance. Continue → `GameManager.go_to_hub()`.
+
+### Storage
+
+`game/meta/storage/storage_scene.gd` + `.tscn` — player manages stored items: queue Market Research, queue Layer Unlock, sell.
+
+- Unlock button disabled with reason tooltip via `AdvanceCheckLabel.describe()` when `KnowledgeManager.can_advance()` returns non-OK.
+- Market Research button queues an `ActiveActionEntry`.
+
+### Specialist Merchant _(deferred)_
+
+_Not yet implemented._ Extends `MerchantData`:
+
+```gdscript
+@export var accepted_super_categories: Array[SuperCategoryData]
+# Empty = pawn shop behaviour (accepts all). Non-empty = specialist.
+
+@export var special_orders: Array[ItemData]
+# Refreshed on Day Pass. Items here sell at 2× sell_price.
+
+@export var required_perk_id: String
+# Empty = no gate. Non-empty = player must hold this perk to access.
+```
+
+Sell rates: in-specialty 1.2–1.5× `sell_price`, out-of-specialty 0.8×. Hub merchant button disabled if perk gate not met. `special_orders` refresh hooks into `SaveManager.advance_days()`.
+
+### Merchant Personality _(deferred)_
+
+Adds `personality_type: MerchantPersonality` enum and an `aggressive_factor` range to `MerchantData`. Affects counter-offer frequency, lock trigger threshold, and `special_orders` refresh rate.
+
+### Garage Sell _(deferred)_
+
+Another auction-type scene modelled on the existing `game/run/auction/` structure. No hard blockers — deferred to avoid scope creep on the selling flow.
+
+### Own Shop _(deferred)_
+
+Player lists items at a set price. Sell frequency scales inversely with ask price vs. market rate. Sale resolution ticks inside `SaveManager.advance_days()` alongside action ticking.
+
+### Reputation + Scam Flow _(deferred)_
+
+Reputation tracked per `merchant_id` (or faction) in `SaveManager`. Degrades on scam detection; affects sell rates and merchant access. Scam flow: player sells a misidentified or veiled item at inflated price. Three outcome branches — safe (no effect), post-payment discovery (large penalty), caught during trade (trade cancelled, moderate penalty). Detection probability via new `MerchantData.detection_skill: float` field.
+
+### Expert Network (Appraisers) _(deferred)_
+
+Appraisers narrow `knowledge_min/max` — see Notes for the open design question that blocks this.
+
+### Bank / Bankruptcy _(deferred)_
+
+Daily interest applied inside `SaveManager.advance_days()` after sale-side mutation and before living cost. Defines bankruptcy state and game-over condition. Optional loan UI in hub.
+
+### Museum / Prestige _(deferred)_
+
+Donation UI in storage scene, new `SaveManager` field for prestige state. See Notes for the design question that blocks this.
+
+### Auction Modifier: All-Base-Layer Run _(deferred)_
+
+Forces every item to display `layer_index = 0` regardless of player knowledge for an entire run. Requires a general auction modifier system design first.
+
+## Notes
+
+### Appraisers vs Market Research
+
+Open question: appraisers currently narrow `knowledge_min/max`, the same outcome as Market Research. Decide whether they're a stronger version, or something distinct — reveal a specific layer without advancing it, permanently cached knowledge, or a one-off category points boost. Until this is decided, the Expert Network UI has no content to show.
+
+### Prestige shape is undecided
+
+Before building the museum donation path, decide: what does prestige unlock or affect (access tiers, price modifiers, cosmetics, pure achievement)? Is it per-super-category or global? These two answers determine both the `SaveManager` shape and whether the donation UI belongs in storage or is its own scene.
+
+### Car system lives in `vehicle.md`
+
+Hub is where vehicle selection and the car shop _surface_, but the system doc is `vehicle.md`. This doc only references it.
+
+### Reputation and scam flow must be designed together
+
+Scam flow writes to reputation; severity thresholds determine outcome branches. Shipping one without the other produces either unhooked reputation data or an outcome system with no data to gate on.
+
+## Done
+
+- [x] Hub scene with Knowledge / Storage / Warehouse Entry / Day Pass buttons
+- [x] `_do_day_pass()` → `SaveManager.advance_days(1)` → `DaySummaryScene`
+- [x] Hub `_refresh_display()` on return from `DaySummaryScene`
+- [x] Knowledge Hub entry scene routing to Mastery / Skills / Perks sub-panels
+- [x] `DaySummaryScene` shared by hub day-pass and run-review flows; reads from `GameManager.consume_pending_day_summary()`
+- [x] Storage scene with Market Research queue, Layer Unlock queue, sell
+- [x] Storage Unlock button disabled-reason tooltip via `AdvanceCheckLabel.describe()`
+
+## Soon
+
+_None._
+
+## Blocked
+
+- [ ] Expert Network (Appraisers) UI and data — blocked on appraiser-vs-Market-Research design decision (see Notes)
+- [ ] Museum / Prestige donation path — blocked on prestige shape decision (see Notes)
+- [ ] Reputation system — blocked on co-design with scam flow
+- [ ] Scam flow — blocked on co-design with reputation system and new `MerchantData.detection_skill` field
+- [ ] All-base-layer auction modifier — blocked on general auction modifier system design
+
+## Later
+
+- [ ] Specialist Merchant — `MerchantData` extensions, sell-rate multipliers, `special_orders` refresh on `advance_days()`
+- [ ] Merchant Personality — `personality_type` enum and `aggressive_factor`
+- [ ] Garage Sell scene modelled on `game/run/auction/`
+- [ ] Own Shop — player listings resolved inside `advance_days()`
+- [ ] Bank / Bankruptcy — daily interest inside `advance_days()`, bankruptcy game-over, optional loan UI
+- [ ] Warehouse variant support surfaced in hub (different exteriors and lot counts per location — system doc is `location_and_lot.md`)
