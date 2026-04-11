@@ -18,6 +18,7 @@ arrival polish) have something to attach to.
 ## 3. Context
 
 Already wired:
+
 - `LocationData` resource exists with `lot_pool`, `lot_number`, `entry_fee`,
   `travel_days`.
 - `RunRecord.create(location, car)` already takes a `LocationData` and
@@ -27,6 +28,7 @@ Already wired:
   working unchanged after this phase.
 
 Needs work:
+
 - `stage/runs/warehouse/warehouse_entry.{gd,tscn}` hardcodes `location_data`
   via `@export` and preloads `ClosedTexture` / `OpenTexture`. This scene is
   being renamed and gutted of its `LocationData` ownership.
@@ -35,6 +37,7 @@ Needs work:
   `data/tres/locations/warehouse_location.tres`.
 
 Out of scope for this phase:
+
 - YAML→tres pipeline for locations (locations are hand-authored in the editor
   this phase; the YAML pipeline is a later block).
 - Per-location textures, arrival animations, or any visual polish — the door
@@ -98,7 +101,7 @@ display name and one-line description).
 - `_init_run()`: stop calling `RunRecord.create(...)`. The selection screen
   is now responsible for building the record. This function should assert
   `RunManager.run_record != null` and `RunManager.run_record.location_data
-  != null`, then do nothing else (or be inlined into `_ready()` and removed).
+!= null`, then do nothing else (or be inlined into `_ready()` and removed).
 - `_play_door_animation()`: keep the tween structure but drop the texture
   swap. Leave a TODO comment that arrival visuals come from a later block.
   The fade-in/fade-out and the final `GameManager.go_to_lot_browse` callback
@@ -134,7 +137,7 @@ Duplicate `warehouse_location.tres` in the editor and produce:
 
 Each file's stem must equal its `location_id`.
 
-### New scene: `stage/hub/location_select/location_select.{gd,tscn}`
+### New scene: `game/hub/location_select/location_select.{gd,tscn}`
 
 - Loads all `LocationData.tres` from `res://data/tres/locations/` via a
   directory scan at `_ready()`. (No registry autoload yet — direct scan is
@@ -150,7 +153,7 @@ Each file's stem must equal its `location_id`.
   GameManager.go_to_location_entry()
   ```
 
-### New scene: `stage/hub/location_select/location_card.{gd,tscn}`
+### New scene: `game/hub/location_select/location_card.{gd,tscn}`
 
 Clone the structure of the existing `ItemCard` (whatever its path is — find
 it by grep). The card takes a `LocationData` via a setter and displays:
