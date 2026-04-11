@@ -72,12 +72,9 @@ Cargo already reads `car_config.fuel_cost_per_day`, so the pre-run cost preview 
 
 ## Soon
 
+- [ ] `LocationCard`: read active car and show pre-run cost preview (`entry_fee + fuel_cost_per_day × travel_days`)
 - [ ] Extend YAML → `.tres` pipeline to author locations and their lot pools
 - [ ] Author 3–5 starter locations with distinct risk profiles, tuned primarily via `aggressive_lerp` ranges
-- [ ] `LocationData` fields: `card_art`, `exterior_closed`, `exterior_open`
-- [ ] `LocationCard`: read active car and show pre-run cost preview (`entry_fee + fuel_cost_per_day × travel_days`)
-- [ ] Source exterior textures in `location_entry` from `LocationData` instead of the placeholder fade
-- [ ] Arrival polish in `location_entry`: vehicle pull-up, ambient sound, time-of-day lighting (currently only a texture fade)
 
 ## Blocked
 
@@ -86,6 +83,10 @@ Cargo already reads `car_config.fuel_cost_per_day`, so the pre-run cost preview 
 - [ ] Travel day consumption surfaced in calendar — blocked on calendar / time system
 
 ## Later
+
+- [ ] `LocationData` fields: `card_art`, `exterior_closed`, `exterior_open`
+- [ ] Source exterior textures in `location_entry` from `LocationData` instead of the placeholder fade
+- [ ] Arrival polish in `location_entry`: vehicle pull-up, ambient sound, time-of-day lighting (currently only a texture fade)
 
 - [ ] Location-specific NPC bidder personalities
 - [ ] Seasonal / rotating lot pools
