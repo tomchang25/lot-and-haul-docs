@@ -15,7 +15,7 @@ Make the vehicle a meaningful cross-run investment: which car you drive should c
 ## Writes
 
 - `SaveManager.active_car_id` — updated by the selection screen
-- `SaveManager.owned_car_ids` (new) — array of owned vehicles; appended on purchase
+- `SaveManager.owned_cars` (new) — array of owned vehicles; appended on purchase
 - `SaveManager.cash` — debited on purchase
 
 On select: returns to `hub`. On purchase: stays in shop, refreshes owned/active state.
@@ -36,13 +36,13 @@ Fields still to add:
 New `SaveManager` state:
 
 ```gdscript
-var owned_car_ids: Array[String] = []  # all cars the player has bought
+var owned_cars: Array[String] = []  # all cars the player has bought
 var active_car_id: String              # already exists; stays authoritative
 ```
 
 ### Car Selection Screen
 
-`game/meta/car_select/car_select_scene.gd` + `.tscn` — _not yet implemented._ Reached from Hub before starting a run. Lists `owned_car_ids` with stat preview (grid dims, stamina, fuel cost, extra slots, max weight). Selecting sets `SaveManager.active_car_id` and returns to Hub.
+`game/meta/car_select/car_select_scene.gd` + `.tscn` — _not yet implemented._ Reached from Hub before starting a run. Lists `owned_cars` with stat preview (grid dims, stamina, fuel cost, extra slots, max weight). Selecting sets `SaveManager.active_car_id` and returns to Hub.
 
 ### Car Shop
 
@@ -78,14 +78,16 @@ yet scheduled.
 - [x] `CarData` resource with `car_id`, `display_name`, `grid_columns`, `grid_rows`, `max_weight`, `stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`
 - [x] `CarData` consumed by `RunRecord` (`stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`) and cargo scene (grid + trailer slots + weight)
 - [x] `SaveManager.active_car` getter returns the active `CarData` via `CarRegistry`
+- [x] Add CarData to Yaml to tres
+- [x] Add 4 `CarData` `.tres` files with distinct progression
+
+- [x] `game/meta/car_select/` scene — stat preview, sets `active_car_id`
+- [x] `CarData.price` and `CarData.icon` fields
+- [x] `SaveManager.owned_cars` persistence; append on purchase; migrate existing saves to include the starter car
+- [x] `game/meta/car_shop/` scene — browse purchasable cars, buy with cash
 
 ## Soon
 
-- [ ] Author 3–5 starter `CarData` `.tres` files with distinct progression
-- [ ] `SaveManager.owned_car_ids` persistence; append on purchase; migrate existing saves to include the starter car
-- [ ] `CarData.price` and `CarData.icon` fields
-- [ ] `game/meta/car_select/` scene — stat preview, sets `active_car_id`
-- [ ] `game/meta/car_shop/` scene — browse purchasable cars, buy with cash
 - [ ] Audit cargo scene for hardcoded constants (`TEMP_GRID_COLS` / `TEMP_GRID_ROWS`, etc.) that should move to `CarData`
 
 ## Blocked

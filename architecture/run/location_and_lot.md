@@ -74,6 +74,8 @@ Cargo already reads `car_config.fuel_cost_per_day`, so the pre-run cost preview 
 
 - [ ] `LocationCard`: read active car and show pre-run cost preview (`entry_fee + fuel_cost_per_day × travel_days`)
 - [ ] Extend YAML → `.tres` pipeline to author locations and their lot pools
+- [ ] Location Yaml
+- [ ] Lot Yaml
 - [ ] Author 3–5 starter locations with distinct risk profiles, tuned primarily via `aggressive_lerp` ranges
 
 ## Blocked
