@@ -1,0 +1,3 @@
+[submodule "lot-and-haul"]
+	path = lot-and-haul
+	url = https://github.com/tomchang25/lot-and-haul.git
