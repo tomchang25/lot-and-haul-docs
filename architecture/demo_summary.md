@@ -49,7 +49,7 @@ starting over with a new location.
 | X-ray inspect action | Done          | 3 SP action in inspection scene; gated by `xray_inspect` perk; uses `entry.unveil()` |
 | Pawn shop v2         | New           | Full sell flow with MerchantData; replaces on-site flat sell as the cash-out point |
 | Mastery gate         | New           | Location browse availability check against mastery rank for high-tier auctions     |
-| CarConfig variants   | New           | Min 2–3 additional .tres files (large van for Run 1, small van for post-reset)     |
+| CarData variants   | New           | Min 2–3 additional .tres files (large van for Run 1, small van for post-reset)     |
 | Test item set        | New           | High base value, shallow layers, tuned for director runs                           |
 
 ---
@@ -60,4 +60,4 @@ starting over with a new location.
 2. **Dialog system** — linear first, Uncle branching second.
 3. **Pawn shop v2** — needed for Run 1 loop to feel complete.
 4. **Mastery gate** — location browse check; low effort, high perceived depth.
-5. **CarConfig variants + test items** — data work; fill in last.
+5. **CarData variants + test items** — data work; fill in last.
