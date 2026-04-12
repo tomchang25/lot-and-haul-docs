@@ -13,17 +13,18 @@ No block scene depends on another block's scene; they all depend on the shared t
 | `RunManager`       | `global/autoload/run_manager.gd`       | Holds `run_record: RunRecord`. Null between runs.                                                                                                                                 |
 | `SaveManager`      | `global/autoload/save_manager.gd`      | Persistent cross-run data: cash, storage, category points, skill levels, perks.                                                                                                   |
 | `KnowledgeManager` | `global/autoload/knowledge_manager.gd` | Three knowledge pillars: category mastery (passive), skill levels (trained), perk registry (granted). Also price ranges and layer unlock checks. See `knowledge.md` for full API. |
-| `ItemRegistry`     | `global/autoload/item_registry/`       | Lookup table for all `ItemData` resources; super-category reverse index.                                                                                                          |
+| `ItemRegistry`     | `global/autoload/item_registry.gd`     | Lookup table for all `ItemData` resources; super-category reverse index.                                                                                                          |
 | `CarRegistry`      | `global/autoload/car_registry.gd`      | Loads all `CarData` `.tres` from `data/tres/cars/`. Exposes `get_car(id)` / `get_all_cars()`.                                                                                     |
+| `LocationRegistry` | `global/autoload/location_registry.gd` | Loads all `LocationData` `.tres` from `data/tres/locations/`. Exposes `get_location(id)` / `get_all_locations()`.                                                                  |
 | `AudioManager`     | `global/autoload/audio_manager/`       | Audio bus wrappers and event types.                                                                                                                                               |
-| `EventBus`         | `global/autoload/event_bus/`           | Cross-scene signal bus.                                                                                                                                                           |
+| `EventBus`         | `global/autoload/event_bus.gd`         | Cross-scene signal bus.                                                                                                                                                           |
 
 ### Constants (accessed by `class_name`, not autoloads)
 
 | Class       | File                             | Role                                                                                                                      |
 | ----------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `Economy`   | `global/constants/economy.gd`    | `DAILY_BASE_COST` and other economy constants.                                                                            |
-| `DataPaths` | `global/constants/data_paths.gd` | Single source of truth for `res://data/tres/` directory strings: `ITEMS_DIR`, `PERKS_DIR`, `SKILLS_DIR`, `LOCATIONS_DIR`. |
+| `DataPaths` | `global/constants/data_paths.gd` | Single source of truth for `res://data/tres/` directory strings: `ITEMS_DIR`, `PERKS_DIR`, `SKILLS_DIR`, `LOCATIONS_DIR`, `CARS_DIR`. |
 
 ---
 
@@ -42,8 +43,10 @@ var cargo_items: Array[ItemEntry]        # subset chosen in cargo scene
 var last_lot_won_items: Array[ItemEntry] # latest lot only; used by reveal_scene
 
 var onsite_proceeds: int                 # cash from on-site sales in cargo scene
-var paid_price: int                      # price paid at last won auction
+var paid_price: int                      # running total across all won auctions this visit
 var net: int                             # onsite_proceeds - paid_price
+var entry_fee: int                       # locked at create() from location_data.entry_fee
+var fuel_cost: int                       # locked at create() from car_data.fuel_cost_per_day × travel_days
 
 var stamina: int
 var max_stamina: int                     # set from car_data.stamina_cap at create()
@@ -368,7 +371,7 @@ Header buttons are runtime-built from the `columns` array (permitted exception u
 
 ## Designer Resources
 
-### `SuperCategoryData` (`data/_definitions/super_category_data.gd`)
+### `SuperCategoryData` (`data/definitions/super_category_data.gd`)
 
 ```gdscript
 @export var super_category_id: String   # snake_case; matches .tres filename stem
@@ -378,7 +381,7 @@ Header buttons are runtime-built from the `columns` array (permitted exception u
 `.tres` files under `data/super_categories/`.
 `ItemRegistry` builds a reverse index (`super_category_id → Array[category_id]`) at startup.
 
-### `CategoryData` (`data/_definitions/category_data.gd`)
+### `CategoryData` (`data/definitions/category_data.gd`)
 
 ```gdscript
 @export var category_id: String
@@ -392,7 +395,7 @@ func get_cells() -> Array[Vector2i]      # delegates to CargoShapes.get_cells(sh
 
 `.tres` files under `data/categories/`.
 
-### `ItemData` (`data/_definitions/item_data.gd`)
+### `ItemData` (`data/definitions/item_data.gd`)
 
 ```gdscript
 @export var item_id: String
@@ -405,7 +408,7 @@ enum Rarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
 
 `.tres` files under `data/items/`.
 
-### `IdentityLayer` (`data/_definitions/identity_layer.gd`)
+### `IdentityLayer` (`data/definitions/identity_layer.gd`)
 
 ```gdscript
 @export var layer_id: String
@@ -416,7 +419,7 @@ enum Rarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
 
 Inline sub-resource inside `ItemData`, or standalone `.tres` under `data/identity_layers/` for reuse.
 
-### `LayerUnlockAction` (`data/_definitions/layer_unlock_action.gd`)
+### `LayerUnlockAction` (`data/definitions/layer_unlock_action.gd`)
 
 See `knowledge.md` for the full resource definition, gate fields, and `can_advance()` enum.
 
@@ -429,7 +432,7 @@ enum ActionContext { AUTO, HOME }
 | `AUTO` | Not used for player actions. Present for schema completeness on layer-0 definitions; actual 0→1 advance is handled in `reveal_scene.gd`. |
 | `HOME` | Requires home workshop. Checked in `storage_scene.gd`.                                                                                   |
 
-### `SkillData` (`data/_definitions/skill_data.gd`)
+### `SkillData` (`data/definitions/skill_data.gd`)
 
 ```gdscript
 @export var skill_id: String
@@ -439,7 +442,7 @@ enum ActionContext { AUTO, HOME }
 
 `.tres` files under `data/tres/skills/`. See `knowledge.md` for full spec.
 
-### `PerkData` (`data/_definitions/perk_data.gd`)
+### `PerkData` (`data/definitions/perk_data.gd`)
 
 ```gdscript
 @export var perk_id: String
@@ -449,7 +452,7 @@ enum ActionContext { AUTO, HOME }
 
 `.tres` files under `data/tres/perks/`. See `knowledge.md` for perk list and acquisition model.
 
-### `LotData` (`data/_definitions/lot_data.gd`)
+### `LotData` (`data/definitions/lot_data.gd`)
 
 ```gdscript
 @export var aggressive_factor_min: float       # default 0.3
@@ -462,10 +465,10 @@ enum ActionContext { AUTO, HOME }
 @export var price_variance_max: float          # default 1.15
 @export var npc_layer_sight_chance: float      # default 0.5
 @export var opening_bid_factor: float          # default 0.25
-@export var veiled_chance: float               # 0.0–1.0
-@export var item_count_min: int
-@export var item_count_max: int
-@export var action_quota: int                  # per-lot inspection action limit
+@export var veiled_chance: float = 0.4          # 0.0–1.0
+@export var item_count_min: int = 3
+@export var item_count_max: int = 5
+@export var action_quota: int = 6               # per-lot inspection action limit
 @export var rarity_weights: Dictionary         # Rarity → int weight
 @export var super_category_weights: Dictionary # super_category_id → int weight
 @export var category_weights: Dictionary       # category_id → int weight
@@ -506,6 +509,8 @@ var unlocked_perks: Array[String]
 var cash: int
 var active_car_id: String         # default "van_basic"
 var owned_car_ids: Array[String] = []   # all cars the player has bought; migrated to include starter on load
+var active_car: CarData           # computed getter: CarRegistry.get_car(active_car_id)
+var owned_cars: Array[CarData]    # computed getter: resolves each owned_car_ids entry via CarRegistry
 var storage_items: Array          # Array[ItemEntry]; deserialized on load
 var current_day: int
 var max_concurrent_actions: int   # default 2; base value, can be raised by perks
@@ -513,20 +518,11 @@ var next_entry_id: int            # monotonically increasing; never reset or reu
 var active_actions: Array         # Array of plain Dictionaries; see ActiveActionEntry
 ```
 
-### Computed properties
-
-```gdscript
-var owned_cars: Array[CarData]:
-    get:
-        # Resolve each id in owned_car_ids via CarRegistry, skip nulls.
-```
-
 ### Key methods
 
 ```gdscript
 func save() -> void
 func load() -> void
-func load_active_car() -> CarData
 func register_storage_item(entry: ItemEntry) -> void
 # Assigns entry.id = next_entry_id, increments next_entry_id, appends, saves.
 func register_storage_items(entries: Array[ItemEntry]) -> void
@@ -591,6 +587,7 @@ Continue button returns to hub via `GameManager.go_to_hub()`.
 ```gdscript
 func get_item(item_id: String) -> ItemData
 func get_items(rarity: Rarity, category_id: String) -> Array[ItemData]
+func get_all_items() -> Array[ItemData]
 func get_categories_for_super(super_category_id: String) -> Array[String]
 func get_all_super_category_ids() -> Array[String]
 func get_super_category_display_name(super_category_id: String) -> String
@@ -647,6 +644,7 @@ No database layer — the old SQLite pipeline has been removed.
 - [x] `LayerUnlockAction` with full gate set: `context`, `required_skill`, `required_level`, `required_condition`, `required_category_rank`, `required_perk_id`
 - [x] `CarData` with `grid_columns`, `grid_rows`, `extra_slot_count`, `stamina_cap`, `fuel_cost_per_day`, `max_weight`, `price`, `icon`, `stats_line()`
 - [x] `CarRegistry` autoload — loads all `CarData` `.tres`; `get_car()` / `get_all_cars()`
+- [x] `LocationRegistry` autoload — loads all `LocationData` `.tres`; `get_location()` / `get_all_locations()`
 - [x] `SaveManager` — all fields including `active_actions`, `unlocked_perks`, `skill_levels`, `next_entry_id`, `current_day`, `owned_car_ids`
 - [x] `ActiveActionEntry` with `to_dict()` / `from_dict()`; stored as plain Dicts in SaveManager
 - [x] `LotData.super_category_weights` — super-category roll before category roll in `LotEntry._draw_item()`

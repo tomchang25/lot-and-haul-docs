@@ -22,7 +22,7 @@ On confirm: `GameManager.go_to_run_review()`.
 
 ### Data Definitions
 
-`CarData` — class at `data/definitions/car_data.gd`; instances at `data/tres/cars/*.tres`. `CarRegistry` autoload loads all `.tres` and exposes `get_car(id)` / `get_all_cars()`. `SaveManager.active_car_id` points to the active config; loaded by `SaveManager.load_active_car()`.
+`CarData` — class at `data/definitions/car_data.gd`; instances at `data/tres/cars/*.tres`. `CarRegistry` autoload loads all `.tres` and exposes `get_car(id)` / `get_all_cars()`. `SaveManager.active_car_id` points to the active config; loaded by `SaveManager.active_car`.
 
 ```gdscript
 @export var car_id: String

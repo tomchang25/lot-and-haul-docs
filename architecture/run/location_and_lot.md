@@ -8,7 +8,7 @@ Make "where to run" a meaningful decision before "how to run": multiple warehous
 
 ## Reads
 
-- `SaveManager.load_active_car()` — needed on location cards to preview `fuel_cost_per_day × travel_days`
+- `SaveManager.active_car` — needed on location cards to preview `fuel_cost_per_day × travel_days`
 - `RunManager.run_record.location_data` — downstream scenes (e.g. `location_entry`) read this instead of an `@export`
 
 ## Writes
@@ -27,17 +27,17 @@ On confirm: `GameManager.go_to_location_entry()`.
 @export var location_id: String
 @export var display_name: String
 @export var description: String
-@export var entry_fee: int               # cash
-@export var travel_days: int             # days consumed by advance_days()
-@export var lot_number: int              # lots sampled per visit
-@export var lot_pool: Array[LotData]
+@export var entry_fee: int = 0           # cash
+@export var travel_days: int = 1         # days consumed by advance_days()
+@export var lot_number: int = 3          # lots sampled per visit
+@export var lot_pool: Array[LotData] = []
 ```
 
 `RunRecord.create()` already consumes `LocationData`. Fields still to add: `card_art: Texture2D`, `exterior_closed: Texture2D`, `exterior_open: Texture2D`.
 
 ### Location Select Scene
 
-`game/meta/location_select/location_select.gd` + `.tscn` — implemented. Sits between `hub` and `location_entry`. Scans `DataPaths.LOCATIONS_DIR` for `LocationData` `.tres` files and instantiates a `LocationCard` per entry. Cards currently show display name, description, entry fee, travel days, and lot count. On select, the scene constructs `RunManager.run_record = RunRecord.create(location, SaveManager.load_active_car())` and calls `GameManager.go_to_location_entry()`.
+`game/meta/location_select/location_select.gd` + `.tscn` — implemented. Sits between `hub` and `location_entry`. Scans `DataPaths.LOCATIONS_DIR` for `LocationData` `.tres` files and instantiates a `LocationCard` per entry. Cards currently show display name, description, entry fee, travel days, and lot count. On select, the scene constructs `RunManager.run_record = RunRecord.create(location, SaveManager.active_car)` and calls `GameManager.go_to_location_entry()`.
 
 Still TODO on the card: computed pre-run cost `entry_fee + (fuel_cost_per_day × travel_days)` against the active car. The card does not currently read the active car at all.
 

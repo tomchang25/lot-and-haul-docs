@@ -75,7 +75,14 @@ Returning from `DaySummaryScene` via `GameManager.go_to_hub()` re-runs hub `_rea
 
 ### Pawn Shop
 
-`game/meta/pawn_shop/` — general-rate selling surface reachable from the hub. Accepts all categories (pawn-shop behaviour), backed by a `MerchantData` resource with an empty `accepted_super_categories`. Uses `ItemRow` directly with `PAWN_COLUMNS` (NAME, CONDITION, PRICE) and `SelectionState` for row styling.
+`game/meta/pawn_shop/pawn_shop_scene.gd` + `.tscn` — general-rate selling surface reachable from the hub. Accepts all categories (pawn-shop behaviour), backed by a `MerchantData` resource with an empty `accepted_super_categories`. Uses `ItemRow` directly with `PAWN_COLUMNS` (NAME, CONDITION, PRICE, POTENTIAL) and `SelectionState` for row styling. Context: `ItemViewContext.for_run_review()`.
+
+Clicking a row toggles selection; selected rows expand an **ask-price slider** below the row. The slider maps a normalised `[0, 1]` input to a factor in `[ASK_PRICE_MIN_FACTOR, ASK_PRICE_MAX_FACTOR]` (`0.50`–`1.50`) applied to `entry.sell_price`. Default slider position is `0.5` (100% of sell price). Sell button is disabled until at least one item is selected. Confirm dialog shows a per-item summary with ask prices and total.
+
+```gdscript
+const ASK_PRICE_MIN_FACTOR := 0.50
+const ASK_PRICE_MAX_FACTOR := 1.50
+```
 
 ### Merchant Data (baseline)
 
@@ -170,6 +177,7 @@ Scam flow writes to reputation; severity thresholds determine outcome branches. 
 - [x] Storage scene with Market Research queue, Layer Unlock queue, sell
 - [x] Storage Unlock button disabled-reason tooltip via `AdvanceCheckLabel.describe()`
 - [x] Pawn Shop scene reachable from hub (`GameManager.go_to_pawn_shop()`)
+- [x] Pawn Shop ask-price slider (`ASK_PRICE_MIN_FACTOR`–`ASK_PRICE_MAX_FACTOR`); row selection + confirm dialog with per-item summary
 - [x] `MerchantData` resource with `accepted_super_categories`, `special_order_pool`, `special_order_count`, `required_perk_id`, and runtime `special_orders`
 
 ## Soon

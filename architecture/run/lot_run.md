@@ -9,7 +9,7 @@ Deliver one complete location visit as a tight loop — arrive, browse lots, ins
 ## Reads
 
 - `RunManager.run_record: RunRecord` — run state from location entry through run review
-- `SaveManager.load_active_car()` — consumed by `location_select` when calling `RunRecord.create()`
+- `SaveManager.active_car` — consumed by `location_select` when calling `RunRecord.create()`
 - `SaveManager.cash` — read by run review before sale-side mutation
 - `KnowledgeManager.has_perk("xray_inspect")` — gates X-Ray inspection action
 - `KnowledgeManager.get_price_range()` — narrows price estimate display
@@ -52,7 +52,7 @@ hub
 
 `game/meta/location_select/location_select.gd` + `.tscn` — **meta** scene reached from Hub. Scans `DataPaths.LOCATIONS_DIR` for `LocationData.tres` files, builds one `LocationCard` per entry, and on card press:
 
-1. `RunManager.run_record = RunRecord.create(card.get_location_data(), SaveManager.load_active_car())`.
+1. `RunManager.run_record = RunRecord.create(card.get_location_data(), SaveManager.active_car)`.
 2. `GameManager.go_to_location_entry()`.
 
 This is where the run record is actually built — `location_entry` only consumes it.
@@ -81,7 +81,7 @@ This is where the run record is actually built — `location_entry` only consume
 
 - `max_stamina` is set from `car_data.stamina_cap` at `RunRecord.create()` and persists across lots.
 - `actions_remaining` resets each lot from `LotData.action_quota`.
-- `StaminaHud` at `game/shared/stamina_hud/` displays both values.
+- `StaminaHud` at `game/run/inspection/stamina_hud/` displays both values.
 - When stamina reaches 0 or actions are exhausted, the "Start Auction" button pulses (gold glow tween).
 
 Actions:
@@ -117,7 +117,7 @@ Scene buttons: **Start Auction** opens the List Review overlay; **Pass / Skip** 
 
 ### List Review
 
-`game/run/inspection/list_review/list_review.gd` + `.tscn` — read-only overlay between inspection and auction.
+`game/run/inspection/list_review/list_review_popup.gd` + `.tscn` — read-only overlay between inspection and auction.
 
 ```gdscript
 func populate() -> void
