@@ -20,10 +20,10 @@ No block scene depends on another block's scene; they all depend on the shared t
 
 ### Constants (accessed by `class_name`, not autoloads)
 
-| Class       | File                              | Role                                                                             |
-| ----------- | --------------------------------- | -------------------------------------------------------------------------------- |
-| `Economy`   | `global/constants/economy.gd`     | `DAILY_BASE_COST` and other economy constants.                                   |
-| `DataPaths` | `global/constants/data_paths.gd`  | Single source of truth for `res://data/tres/` directory strings: `ITEMS_DIR`, `PERKS_DIR`, `SKILLS_DIR`, `LOCATIONS_DIR`. |
+| Class       | File                             | Role                                                                                                                      |
+| ----------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `Economy`   | `global/constants/economy.gd`    | `DAILY_BASE_COST` and other economy constants.                                                                            |
+| `DataPaths` | `global/constants/data_paths.gd` | Single source of truth for `res://data/tres/` directory strings: `ITEMS_DIR`, `PERKS_DIR`, `SKILLS_DIR`, `LOCATIONS_DIR`. |
 
 ---
 
@@ -278,14 +278,14 @@ its own `columns: Array` of `ItemRow.Column` values to `ItemRow.setup()` and
 
 ### Factories
 
-| Factory             | Condition         | Potential  | Price            | Stage        |
-| ------------------- | ----------------- | ---------- | ---------------- | ------------ |
-| `for_inspection()`  | RESPECT           | RESPECT    | CURRENT_ESTIMATE | INSPECTION   |
-| `for_list_review()` | RESPECT           | RESPECT    | CURRENT_ESTIMATE | LIST_REVIEW  |
-| `for_reveal()`      | FORCE_INSPECT_MAX | FORCE_FULL | CURRENT_ESTIMATE | REVEAL       |
-| `for_cargo()`       | FORCE_INSPECT_MAX | FORCE_FULL | CURRENT_ESTIMATE | CARGO        |
-| `for_run_review()`  | FORCE_TRUE_VALUE  | FORCE_FULL | SELL_PRICE       | RUN_REVIEW   |
-| `for_storage()`     | FORCE_TRUE_VALUE  | FORCE_FULL | SELL_PRICE       | STORAGE      |
+| Factory             | Condition         | Potential  | Price            | Stage       |
+| ------------------- | ----------------- | ---------- | ---------------- | ----------- |
+| `for_inspection()`  | RESPECT           | RESPECT    | CURRENT_ESTIMATE | INSPECTION  |
+| `for_list_review()` | RESPECT           | RESPECT    | CURRENT_ESTIMATE | LIST_REVIEW |
+| `for_reveal()`      | FORCE_INSPECT_MAX | FORCE_FULL | CURRENT_ESTIMATE | REVEAL      |
+| `for_cargo()`       | FORCE_INSPECT_MAX | FORCE_FULL | CURRENT_ESTIMATE | CARGO       |
+| `for_run_review()`  | FORCE_TRUE_VALUE  | FORCE_FULL | SELL_PRICE       | RUN_REVIEW  |
+| `for_storage()`     | FORCE_TRUE_VALUE  | FORCE_FULL | SELL_PRICE       | STORAGE     |
 
 ---
 
@@ -665,8 +665,8 @@ No database layer — the old SQLite pipeline has been removed.
 
 ## Soon
 
-- ~~Multiple vehicle configurations selectable from Hub before a run~~ *(done — see Vehicle system)*
-- ~~Pre-run cost preview on location browse (entry fee + fuel + travel days)~~ *(moved to `location_and_lot.md`)*
+- ~~Multiple vehicle configurations selectable from Hub before a run~~ _(done — see Vehicle system)_
+- ~~Pre-run cost preview on location browse (entry fee + fuel + travel days)~~ _(moved to `location_and_lot.md`)_
 
 _None._
 

@@ -44,7 +44,7 @@ Hub provides read-only mastery/skills/perks display; Skill Panel allows upgrades
 remaining gap is selling above pawn rate. Without a complete arc from location visit to sale,
 no other system can be meaningfully tested or calibrated.
 
-**Phase 2 — Car system** *(mostly done)*: `CarData` carries `fuel_cost_per_day`, `max_weight`,
+**Phase 2 — Car system** _(mostly done)_: `CarData` carries `fuel_cost_per_day`, `max_weight`,
 `price`, and `icon`. Four cars authored (`van_basic`, `box_truck`, `cargo_hauler`, `semi_rig`).
 Vehicle Hub, Car Select (Garage), and Car Shop are implemented. Remaining: audit cargo scene
 hardcoded constants (`TEMP_GRID_COLS`/`TEMP_GRID_ROWS`) and tune car progression against real
@@ -72,7 +72,7 @@ Full design spec and implementation status in `knowledge.md`. Summary:
 
 See `hub_home.md` for full specs on each. Summary:
 
-- ~~**Car System**~~ — *(done)* car selection from Hub; 4 `CarData` variants authored. See `vehicle.md`.
+- ~~**Car System**~~ — _(done)_ car selection from Hub; 4 `CarData` variants authored. See `vehicle.md`.
 - **Bank / Bankruptcy** — daily interest, game-over condition, optional loans. No hard blocker.
 - **Specialist Merchant** — category-filtered sell flow with `MerchantData`. Depends on selling flow.
 - **Merchant Personality** — counter-offer frequency, lock thresholds. Requires merchant base.
@@ -88,8 +88,8 @@ See `hub_home.md` for full specs on each. Summary:
 
 ## Post-Demo Targets
 
-- ~~Location selection before entry: multiple warehouses with different item pools and risk profiles~~ *(see `location.md`)*
-- ~~Pre-run intel overlay: tip-off info purchasable at Hub; displayed in warehouse entry before the door opens~~ *(see `location.md`)*
-- ~~Pre-run cost preview: entry fee + fuel + travel days shown on `LotCard` or location selection screen~~ *(see `location.md`)*
-- ~~Arrival animation polish: vehicle pull-up, ambient sound, time-of-day lighting~~ *(see `location.md`)*
-- ~~Warehouse variant support: different exterior images and lot numbers per location~~ *(see `location.md`; `lot_number` already on `LocationData`)*
+- ~~Location selection before entry: multiple warehouses with different item pools and risk profiles~~ _(see `location.md`)_
+- ~~Pre-run intel overlay: tip-off info purchasable at Hub; displayed in warehouse entry before the door opens~~ _(see `location.md`)_
+- ~~Pre-run cost preview: entry fee + fuel + travel days shown on `LotCard` or location selection screen~~ _(see `location.md`)_
+- ~~Arrival animation polish: vehicle pull-up, ambient sound, time-of-day lighting~~ _(see `location.md`)_
+- ~~Warehouse variant support: different exterior images and lot numbers per location~~ _(see `location.md`; `lot_number` already on `LocationData`)_
