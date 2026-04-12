@@ -9,7 +9,7 @@ Turn "what did I win" into a spatial decision: the player must choose which item
 ## Reads
 
 - `RunManager.run_record.won_items` — items to load (accumulated across all won lots this visit)
-- `RunManager.run_record.car_config` — grid dimensions, extra slot count, max weight
+- `RunManager.run_record.car_data` — grid dimensions, extra slot count, max weight
 
 ## Writes
 
@@ -22,7 +22,7 @@ On confirm: `GameManager.go_to_run_review()`.
 
 ### Data Definitions
 
-`CarConfig` — class at `data/definitions/car_config.gd`; instances at `data/cars/*.tres`. `SaveManager.active_car_id` points to the active config; loaded by `SaveManager.load_active_car()`.
+`CarData` — class at `data/definitions/car_data.gd`; instances at `data/tres/cars/*.tres`. `CarRegistry` autoload loads all `.tres` and exposes `get_car(id)` / `get_all_cars()`. `SaveManager.active_car_id` points to the active config; loaded by `SaveManager.load_active_car()`.
 
 ```gdscript
 @export var car_id: String
@@ -33,11 +33,14 @@ On confirm: `GameManager.go_to_run_review()`.
 @export var stamina_cap: int
 @export var fuel_cost_per_day: int = 0     # cash per travel day
 @export var extra_slot_count: int = 0      # independent trailer slots; 0 = no trailer
+@export var price: int = 0                 # cash cost at the car shop
+@export var icon: Texture2D               # Hub + selection UI
 
 func total_slots() -> int  # grid_columns * grid_rows
+func stats_line() -> String  # formatted stats string shared by CarCard and CarRow
 ```
 
-`fuel_cost_per_day` is read by `RunRecord.compute_travel_costs()` and combined with `location_data.travel_days` to produce the run's total fuel cost. The legacy `travel_cost` field has been removed.
+`fuel_cost_per_day` is read by `RunRecord.compute_travel_costs()` and combined with `location_data.travel_days` to produce the run's total fuel cost. The legacy `travel_cost` field has been removed. `price` and `icon` are used by the Vehicle system (see `vehicle.md`).
 
 `CargoShapes` — static class at `data/definitions/cargo_shapes.gd`. Single `const SHAPES: Dictionary` mapping `String → Array[Vector2i]`. All cells are normalised so minimum x and y are 0.
 
@@ -71,7 +74,7 @@ var _cargo_placement: Dictionary           # Vector2i → ItemEntry (cargo cells
 var _cargo_cells: Dictionary               # Vector2i → Panel
 var _temp_placement: Dictionary            # Vector2i → ItemEntry (temp cells)
 var _temp_cells: Dictionary                # Vector2i → Panel
-var _extra_slot_items: Array[ItemEntry]    # size = car_config.extra_slot_count
+var _extra_slot_items: Array[ItemEntry]    # size = car_data.extra_slot_count
 var _item_rotations: Dictionary            # ItemEntry → int (per-item rotation memory)
 ```
 
@@ -82,8 +85,8 @@ var _item_rotations: Dictionary            # ItemEntry → int (per-item rotatio
 Two side-by-side grids plus optional extra slots:
 
 - **Temp grid** — won items start here. Fixed at `TEMP_GRID_COLS × TEMP_GRID_ROWS` (10 × 4).
-- **Cargo grid** — player's vehicle. Dimensions from `car_config.grid_columns × car_config.grid_rows`.
-- **Extra slots** — `car_config.extra_slot_count` single-cell slots on the right side of the cargo grid. Accept any shape and weight; placed items compress to 1×1 visually.
+- **Cargo grid** — player's vehicle. Dimensions from `car_data.grid_columns × car_data.grid_rows`.
+- **Extra slots** — `car_data.extra_slot_count` single-cell slots on the right side of the cargo grid. Accept any shape and weight; placed items compress to 1×1 visually.
 
 ```gdscript
 const CELL_SIZE         := 56  # px per grid cell
@@ -114,7 +117,7 @@ enum Phase {
 
 - All cells the item occupies must be within grid bounds.
 - No cell overlap with other placed items.
-- Total weight after placement must not exceed `car_config.max_weight` (cargo grid only — extra slots bypass the weight check).
+- Total weight after placement must not exceed `car_data.max_weight` (cargo grid only — extra slots bypass the weight check).
 
 Weight enforcement: `_would_exceed_weight()` blocks placements that would push `_weight_used + entry_weight` past the cap. The `StatsBar` shows `"Weight: X.X / Y.Y kg"` with a pending-add preview while an item is held; the label turns red and `ErrorLabel` shows `"Weight limit exceeded! Cannot place item."` when over. Items already in cargo do not double-count when re-positioned.
 
@@ -124,7 +127,7 @@ Items remaining in the temp grid at confirm time are sold on-site at `ONSITE_SEL
 
 ### ItemRow in Cargo Context
 
-`ItemViewContext.for_cargo()` sets `show_cargo_stats = true`, enabling Weight and Grid columns in `ItemRow` and `ItemRowTooltip`.
+`ItemViewContext.for_cargo()` provides the context for cargo display. Consuming scenes pass `WEIGHT` and `GRID` columns via the `columns` array to `ItemRow.setup()`. Column visibility is per-scene, not driven by a context flag.
 
 - `ItemRow` grid column: `"N  shape_id"` — e.g. `"2  sL11"`.
 - `ItemRowTooltip` grid line: `"Grid:  N slot(s)  (shape_id)"`.
@@ -143,7 +146,7 @@ Items remaining in the temp grid at confirm time are sold on-site at `ONSITE_SEL
 | 6               | `s2x3`     |
 | 8               | `s2x4`     |
 
-`CarConfig` `grid_columns × grid_rows` replaces the old `max_slots: int`. Use rectangular layouts (e.g. original `max_slots = 30` → `6 × 5`). YAML field: `shape_id: <string>`. `yaml_to_tres.py` `_build_category_tres()` outputs `shape_id` instead of `grid_size`.
+`CarData` `grid_columns × grid_rows` replaces the old `max_slots: int`. Use rectangular layouts (e.g. original `max_slots = 30` → `6 × 5`). YAML field: `shape_id: <string>`. `yaml_to_tres.py` `_build_category_tres()` outputs `shape_id` instead of `grid_size`.
 
 ### Extra slots bypass weight on purpose
 
@@ -153,18 +156,18 @@ Trailer slots are meant to be the "escape valve" for heavy oddball wins — cons
 
 - [x] `CargoShapes` with 10 shapes
 - [x] `CategoryData.shape_id` + `get_cells()`; `grid_size` removed
-- [x] `CarConfig.grid_columns`, `grid_rows`, `extra_slot_count`, `total_slots()`; `max_slots` removed
-- [x] `CarConfig.fuel_cost_per_day` (replaces unused `travel_cost`); consumed by `RunRecord.compute_travel_costs()`
-- [x] `CarConfig.max_weight` enforced by cargo grid (`_would_exceed_weight`, pending-preview `StatsBar`, error label)
+- [x] `CarData.grid_columns`, `grid_rows`, `extra_slot_count`, `total_slots()`; `max_slots` removed
+- [x] `CarData.fuel_cost_per_day` (replaces unused `travel_cost`); consumed by `RunRecord.compute_travel_costs()`
+- [x] `CarData.max_weight` enforced by cargo grid (`_would_exceed_weight`, pending-preview `StatsBar`, error label)
 - [x] 2-D grid drag-and-drop (`cargo_scene.gd` v2)
-- [x] Extra slots (`car_config.extra_slot_count`; `_extra_slot_items` array in scene)
+- [x] Extra slots (`car_data.extra_slot_count`; `_extra_slot_items` array in scene)
 - [x] Item rotation (Q / E keys); per-session memory via `_item_rotations`
 - [x] On-site sell at flat rate; proceeds written to `onsite_proceeds`
 - [x] `ItemRow` and `ItemRowTooltip` show Weight and Grid columns in cargo context
 
 ## Soon
 
-- [ ] Multiple vehicle configurations selectable from Hub before a run
+- ~~Multiple vehicle configurations selectable from Hub before a run~~ *(done — see `vehicle.md`)*
 - [ ] Vehicle types reflected in game run check
 
 ## Blocked
