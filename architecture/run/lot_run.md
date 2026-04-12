@@ -44,7 +44,7 @@ hub
 
 ### Data Definitions
 
-`RunRecord` — class at `game/shared/run_record/run_record.gd`; runtime instance lives on `RunManager.run_record`, not a `.tres`. Owns `location_data`, `car_config`, `browse_lots`, `browse_index`, `lot_entry`, `lot_items`, `won_items`, `last_lot_won_items`, `cargo_items`, `onsite_proceeds`, `paid_price`, `net`, `entry_fee`, `fuel_cost`, `stamina`, `max_stamina`, `actions_remaining`. `create(location_data, car_config)` calls `compute_travel_costs()` to lock `entry_fee` and `fuel_cost` for the entire run.
+`RunRecord` — class at `game/shared/run_record/run_record.gd`; runtime instance lives on `RunManager.run_record`, not a `.tres`. Owns `location_data`, `car_data`, `browse_lots`, `browse_index`, `lot_entry`, `lot_items`, `won_items`, `last_lot_won_items`, `cargo_items`, `onsite_proceeds`, `paid_price`, `net`, `entry_fee`, `fuel_cost`, `stamina`, `max_stamina`, `actions_remaining`. `create(location_data, car_data)` calls `compute_travel_costs()` to lock `entry_fee` and `fuel_cost` for the entire run.
 
 `ItemEntry` runtime fields touched by this system: `potential_inspect_level`, `condition_inspect_level`, `layer_index`, `paid_price`. See the item system doc for the full class.
 
@@ -79,9 +79,9 @@ This is where the run record is actually built — `location_entry` only consume
 
 `game/run/inspection/inspection_scene.gd` + `.tscn` — player spends stamina to inspect items in the current lot.
 
-- `max_stamina` is set from `car_config.stamina_cap` at `RunRecord.create()` and persists across lots.
+- `max_stamina` is set from `car_data.stamina_cap` at `RunRecord.create()` and persists across lots.
 - `actions_remaining` resets each lot from `LotData.action_quota`.
-- `StaminaHud` at `game/_shared/stamina_hud/` displays both values.
+- `StaminaHud` at `game/shared/stamina_hud/` displays both values.
 - When stamina reaches 0 or actions are exhausted, the "Start Auction" button pulses (gold glow tween).
 
 Actions:
@@ -102,7 +102,7 @@ const CONDITION_COST := 2  # SP
 const XRAY_COST      := 3  # SP
 ```
 
-`ItemCard` at `game/_shared/item_display/item_card.gd` uses `ItemViewContext.for_inspection()` (all modes `RESPECT_INSPECT_LEVEL`). Plays a colour-flash tween on the field named by `refresh(changed)` — `"potential"`, `"condition"`, or `"unveil"`.
+`ItemCard` at `game/shared/item_display/item_card.gd` uses `ItemViewContext.for_inspection()` (all modes `RESPECT_INSPECT_LEVEL`). Plays a colour-flash tween on the field named by `refresh(changed)` — `"potential"`, `"condition"`, or `"unveil"`.
 
 Price estimate (`entry.current_price_label`) derives from `active_layer().base_value × get_known_condition_multiplier() × knowledge_min/max[layer_index]`:
 
@@ -195,7 +195,7 @@ Layer 0 → 1 advance here is unconditional and bypasses `KnowledgeManager.can_a
 
 ### Cargo
 
-`game/run/cargo/cargo_scene.gd` + `.tscn` — player arranges won items into their vehicle. See `cargo.md` for the full spec. Reads `run_record.won_items` and `car_config`; writes `cargo_items` and `onsite_proceeds`. On confirm: `GameManager.go_to_run_review()`.
+`game/run/cargo/cargo_scene.gd` + `.tscn` — player arranges won items into their vehicle. See `cargo.md` for the full spec. Reads `run_record.won_items` and `car_data`; writes `cargo_items` and `onsite_proceeds`. On confirm: `GameManager.go_to_run_review()`.
 
 ### Run Review
 

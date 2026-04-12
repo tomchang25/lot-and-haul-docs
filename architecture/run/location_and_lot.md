@@ -61,12 +61,12 @@ Location unlock could hang off reputation, money threshold, or story flags. Park
 
 ### Cargo ships first
 
-Cargo already reads `car_config.fuel_cost_per_day`, so the pre-run cost preview has everything it needs the moment the card wiring pulls in the active car. No ordering dependency on other meta systems.
+Cargo already reads `car_data.fuel_cost_per_day`, so the pre-run cost preview has everything it needs the moment the card wiring pulls in the active car. No ordering dependency on other meta systems.
 
 ## Done
 
 - [x] `LocationData` resource with `lot_pool`, `lot_number`, `entry_fee`, `travel_days`, `display_name`, `description`
-- [x] `RunRecord.create(location_data, car_config)` consumes `LocationData` and locks travel costs via `compute_travel_costs()`
+- [x] `RunRecord.create(location_data, car_data)` consumes `LocationData` and locks travel costs via `compute_travel_costs()`
 - [x] `game/meta/location_select/` scene listing available locations with entry fee, travel days, lot count, and description; builds `RunRecord` on select and advances to `location_entry`
 - [x] `location_entry.tscn` reads `location_data` from `RunManager.run_record` instead of `@export`
 

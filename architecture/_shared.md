@@ -14,15 +14,23 @@ No block scene depends on another block's scene; they all depend on the shared t
 | `SaveManager`      | `global/autoload/save_manager.gd`      | Persistent cross-run data: cash, storage, category points, skill levels, perks.                                                                                                   |
 | `KnowledgeManager` | `global/autoload/knowledge_manager.gd` | Three knowledge pillars: category mastery (passive), skill levels (trained), perk registry (granted). Also price ranges and layer unlock checks. See `knowledge.md` for full API. |
 | `ItemRegistry`     | `global/autoload/item_registry/`       | Lookup table for all `ItemData` resources; super-category reverse index.                                                                                                          |
+| `CarRegistry`      | `global/autoload/car_registry.gd`      | Loads all `CarData` `.tres` from `data/tres/cars/`. Exposes `get_car(id)` / `get_all_cars()`.                                                                                     |
 | `AudioManager`     | `global/autoload/audio_manager/`       | Audio bus wrappers and event types.                                                                                                                                               |
 | `EventBus`         | `global/autoload/event_bus/`           | Cross-scene signal bus.                                                                                                                                                           |
 
+### Constants (accessed by `class_name`, not autoloads)
+
+| Class       | File                              | Role                                                                             |
+| ----------- | --------------------------------- | -------------------------------------------------------------------------------- |
+| `Economy`   | `global/constants/economy.gd`     | `DAILY_BASE_COST` and other economy constants.                                   |
+| `DataPaths` | `global/constants/data_paths.gd`  | Single source of truth for `res://data/tres/` directory strings: `ITEMS_DIR`, `PERKS_DIR`, `SKILLS_DIR`, `LOCATIONS_DIR`. |
+
 ---
 
-## RunRecord (`game/_shared/run_record/run_record.gd`)
+## RunRecord (`game/shared/run_record/run_record.gd`)
 
 Runtime state for one warehouse run. Lives on `RunManager.run_record`. Null between runs.
-Created in `warehouse_entry`; cleared in `run_review` via `RunManager.clear_run_state()`.
+Created in `location_select` (meta); cleared in `run_review` via `RunManager.clear_run_state()`.
 
 ### Fields
 
@@ -38,8 +46,8 @@ var paid_price: int                      # price paid at last won auction
 var net: int                             # onsite_proceeds - paid_price
 
 var stamina: int
-var max_stamina: int                     # set from car_config.stamina_cap at create()
-var car_config: CarConfig
+var max_stamina: int                     # set from car_data.stamina_cap at create()
+var car_data: CarData
 
 var actions_remaining: int              # resets each lot from LotData.action_quota
 
@@ -51,7 +59,7 @@ var browse_index: int
 ### Factory
 
 ```gdscript
-static func create(location: LocationData, car: CarConfig) -> RunRecord
+static func create(location: LocationData, car: CarData) -> RunRecord
 ```
 
 ### Lot management
@@ -69,7 +77,7 @@ RunManager.clear_run_state()   # sets run_record = null
 
 ---
 
-## LotEntry (`game/_shared/lot_entry/lot_entry.gd`)
+## LotEntry (`game/shared/lot_entry/lot_entry.gd`)
 
 Runtime context for one lot. Created from `LotData`; all random values rolled once and cached.
 
@@ -118,7 +126,7 @@ sum of `base_value` at the NPC's resolved layer per item.
 
 ---
 
-## ItemEntry (`game/_shared/item_entry/item_entry.gd`)
+## ItemEntry (`game/shared/item_entry/item_entry.gd`)
 
 Runtime state for one item within a run.
 
@@ -242,30 +250,119 @@ static func create(data: ItemData, veil_chance: float = 0.0) -> ItemEntry
 
 ---
 
-## ItemViewContext (`game/_shared/item_display/item_view_context.gd`)
+## ItemViewContext (`game/shared/item_display/item_view_context.gd`)
 
-Pass one instance to `ItemRow`, `ItemCard`, and `ItemRowTooltip`. These components never
-branch on stage directly — they read only the mode fields.
+Pass one instance to `ItemRow`, `ItemCard`, `ItemRowTooltip`, and `ItemListPanel`. These
+components never branch on stage directly — they read only the mode fields.
 
 ### Modes
 
 ```gdscript
 enum ConditionMode { RESPECT_INSPECT_LEVEL, FORCE_INSPECT_MAX, FORCE_TRUE_VALUE }
 enum PotentialMode { RESPECT_INSPECT_LEVEL, FORCE_FULL }
-enum PriceMode     { CURRENT_ESTIMATE, SELL_PRICE }
+enum PriceMode     { CURRENT_ESTIMATE, SELL_PRICE, BASE_VALUE }
 
-var show_cargo_stats: bool   # when true, ItemRow shows Weight and Grid columns
+enum Stage {
+    INSPECTION,
+    LIST_REVIEW,
+    REVEAL,
+    CARGO,
+    RUN_REVIEW,
+    STORAGE,
+}
 ```
+
+Column visibility is no longer driven by `show_cargo_stats` — each consuming scene passes
+its own `columns: Array` of `ItemRow.Column` values to `ItemRow.setup()` and
+`ItemListPanel.setup()`. See the ItemRow / ItemListPanel sections below.
 
 ### Factories
 
-| Factory             | Condition         | Potential  | Price            | show_cargo_stats |
-| ------------------- | ----------------- | ---------- | ---------------- | ---------------- |
-| `for_inspection()`  | RESPECT           | RESPECT    | CURRENT_ESTIMATE | false            |
-| `for_list_review()` | RESPECT           | RESPECT    | CURRENT_ESTIMATE | false            |
-| `for_reveal()`      | FORCE_INSPECT_MAX | FORCE_FULL | CURRENT_ESTIMATE | false            |
-| `for_cargo()`       | FORCE_INSPECT_MAX | FORCE_FULL | CURRENT_ESTIMATE | true             |
-| `for_run_review()`  | FORCE_TRUE_VALUE  | FORCE_FULL | SELL_PRICE       | false            |
+| Factory             | Condition         | Potential  | Price            | Stage        |
+| ------------------- | ----------------- | ---------- | ---------------- | ------------ |
+| `for_inspection()`  | RESPECT           | RESPECT    | CURRENT_ESTIMATE | INSPECTION   |
+| `for_list_review()` | RESPECT           | RESPECT    | CURRENT_ESTIMATE | LIST_REVIEW  |
+| `for_reveal()`      | FORCE_INSPECT_MAX | FORCE_FULL | CURRENT_ESTIMATE | REVEAL       |
+| `for_cargo()`       | FORCE_INSPECT_MAX | FORCE_FULL | CURRENT_ESTIMATE | CARGO        |
+| `for_run_review()`  | FORCE_TRUE_VALUE  | FORCE_FULL | SELL_PRICE       | RUN_REVIEW   |
+| `for_storage()`     | FORCE_TRUE_VALUE  | FORCE_FULL | SELL_PRICE       | STORAGE      |
+
+---
+
+## ItemRow (`game/shared/item_display/item_row.gd`)
+
+Generalised item row used by list_review, reveal, run_review, storage, and pawn_shop. Column visibility is driven by the `columns` array passed to `setup()`.
+
+### Column enum
+
+```gdscript
+enum Column {
+    NAME,
+    CONDITION,
+    PRICE,       # header text is dynamic via get_price_header(ctx)
+    POTENTIAL,
+    WEIGHT,
+    GRID,
+}
+```
+
+`PRICE` merges the old `BASE_VALUE`, `ESTIMATE`, and `SELL_PRICE` label nodes into a single column whose header and value are driven by `ItemViewContext.price_mode`.
+
+```gdscript
+static func get_price_header(ctx: ItemViewContext) -> String
+# Returns "Est. Value" / "Sell Price" / "Base Value" depending on ctx.price_mode.
+```
+
+### SelectionState (renamed from CargoState)
+
+```gdscript
+enum SelectionState {
+    NONE,
+    SELECTED,
+    AVAILABLE,
+    BLOCKED,
+}
+
+func set_selection_state(state: SelectionState) -> void
+# Called by consuming scenes to apply row selection styling.
+```
+
+### setup signature
+
+```gdscript
+func setup(entry: ItemEntry, ctx: ItemViewContext, columns: Array = []) -> void
+```
+
+Each label's visibility is gated on whether its `Column` is in the `columns` array. Consuming scenes define their own column sets (e.g. `STORAGE_COLUMNS`, `REVIEW_COLUMNS`).
+
+---
+
+## ItemListPanel (`game/shared/item_display/item_list_panel/item_list_panel.gd`)
+
+Reusable panel component wrapping a column header row + scrollable `ItemRow` list with click-to-sort headers. Used by storage, run review, list review, and reveal scenes. Pawn shop uses `ItemRow` directly due to its custom price sub-row layout.
+
+```gdscript
+class_name ItemListPanel
+extends PanelContainer
+
+signal row_pressed(entry: ItemEntry)
+signal tooltip_requested(entry: ItemEntry, ctx: ItemViewContext, anchor: Rect2)
+signal tooltip_dismissed
+```
+
+Key methods:
+
+```gdscript
+func setup(ctx: ItemViewContext, columns: Array) -> void
+func populate(entries: Array[ItemEntry]) -> void
+func get_row(entry: ItemEntry) -> ItemRow
+func clear() -> void
+func refresh_row(entry: ItemEntry) -> void
+func rebuild_header() -> void     # call after changing ctx.price_mode
+func apply_sort() -> void
+```
+
+Header buttons are runtime-built from the `columns` array (permitted exception under the Node Source Rule). Clicking a header sorts by that column; clicking again reverses direction. Sort indicator (`▲`/`▼`) appears on the active column.
 
 ---
 
@@ -374,7 +471,7 @@ enum ActionContext { AUTO, HOME }
 @export var category_weights: Dictionary       # category_id → int weight
 ```
 
-### `CarConfig` (`data/_definitions/car_config.gd`)
+### `CarData` (`data/definitions/car_data.gd`)
 
 ```gdscript
 @export var car_id: String
@@ -385,11 +482,14 @@ enum ActionContext { AUTO, HOME }
 @export var stamina_cap: int
 @export var fuel_cost_per_day: int = 0
 @export var extra_slot_count: int = 0
+@export var price: int = 0             # cash cost at the car shop
+@export var icon: Texture2D            # Hub + selection UI
 
 func total_slots() -> int   # grid_columns * grid_rows
+func stats_line() -> String  # "Grid: CxR    Weight: W    Stamina: S    Fuel/day: F    Extra slots: E"
 ```
 
-`.tres` files under `data/cars/`. `SaveManager.active_car_id` points to the active config.
+`.tres` files under `data/tres/cars/`. `CarRegistry` autoload loads all `.tres` from that directory and exposes `get_car(id)` / `get_all_cars()`. `SaveManager.active_car_id` points to the active config.
 
 ---
 
@@ -405,6 +505,7 @@ var skill_levels: Dictionary      # skill_id → int (default 0)
 var unlocked_perks: Array[String]
 var cash: int
 var active_car_id: String         # default "van_basic"
+var owned_car_ids: Array[String] = []   # all cars the player has bought; migrated to include starter on load
 var storage_items: Array          # Array[ItemEntry]; deserialized on load
 var current_day: int
 var max_concurrent_actions: int   # default 2; base value, can be raised by perks
@@ -412,15 +513,26 @@ var next_entry_id: int            # monotonically increasing; never reset or reu
 var active_actions: Array         # Array of plain Dictionaries; see ActiveActionEntry
 ```
 
+### Computed properties
+
+```gdscript
+var owned_cars: Array[CarData]:
+    get:
+        # Resolve each id in owned_car_ids via CarRegistry, skip nulls.
+```
+
 ### Key methods
 
 ```gdscript
 func save() -> void
 func load() -> void
-func load_active_car() -> CarConfig
+func load_active_car() -> CarData
 func register_storage_item(entry: ItemEntry) -> void
 # Assigns entry.id = next_entry_id, increments next_entry_id, appends, saves.
 func register_storage_items(entries: Array[ItemEntry]) -> void
+func buy_car(car: CarData) -> bool
+# Returns false if cash < price or already owned.
+# On success: debit cash, append id to owned_car_ids, save(), return true.
 func advance_days(n: int) -> DaySummary
 # Deducts living cost, ticks active actions, returns a summary of what happened.
 ```
@@ -432,7 +544,7 @@ func advance_days(n: int) -> DaySummary
 
 ---
 
-## ActiveActionEntry (`game/_shared/active_action_entry.gd`)
+## ActiveActionEntry (`game/shared/active_action_entry.gd`)
 
 Runtime representation of one queued home action.
 
@@ -456,7 +568,7 @@ Serialised in `SaveManager.active_actions` as plain Dictionaries:
 
 ---
 
-## DaySummary (`game/_shared/day_summary/day_summary.gd`)
+## DaySummary (`game/shared/day_summary/day_summary.gd`)
 
 Value object returned by `SaveManager.advance_days()`. Read by `DaySummaryScene`.
 
@@ -466,7 +578,7 @@ Fields: `start_day`, `end_day`, `days_elapsed`, `onsite_proceeds`, `paid_price`,
 
 ---
 
-## DaySummaryScene (`game/day_summary/day_summary_scene.gd`)
+## DaySummaryScene (`game/meta/day_summary/day_summary_scene.gd`)
 
 Standalone scene displaying day-advancement results (economics, actions). Both the hub
 day-pass flow and the run-review flow navigate here via `GameManager.go_to_day_summary(summary)`.
@@ -493,12 +605,16 @@ Builds a `super_category_id → Array[category_id]` reverse map at `_ready()`.
 
 ```
 Hub
+ ├── Location Select → run loop (location_entry → lot_browse → … → run_review)
+ ├── Storage (manage items, queue actions)
+ ├── Pawn Shop (general-rate selling)
+ ├── Vehicle Hub
+ │    ├── Garage / Car Select (select active car from owned cars)
+ │    └── Car Shop (buy new cars with cash)
  ├── Knowledge Hub
  │    ├── Mastery Panel (read-only display of ranks and category progress)
  │    ├── Skill Panel (upgrade skills with cash; gated by mastery)
  │    └── Perk Panel (read-only display of unlocked/locked perks)
- ├── Storage (manage items, queue actions)
- ├── Warehouse Entry → run loop
  └── Day Pass → DaySummaryScene
 ```
 
@@ -529,18 +645,30 @@ No database layer — the old SQLite pipeline has been removed.
 - [x] `CategoryData` with `shape_id` and `get_cells()`
 - [x] `ItemData.rarity` enum — lot-draw filter only, never displayed
 - [x] `LayerUnlockAction` with full gate set: `context`, `required_skill`, `required_level`, `required_condition`, `required_category_rank`, `required_perk_id`
-- [x] `CarConfig` with `grid_columns`, `grid_rows`, `extra_slot_count`, `stamina_cap`, `fuel_cost_per_day`, `max_weight`
-- [x] `SaveManager` — all fields including `active_actions`, `unlocked_perks`, `skill_levels`, `next_entry_id`, `current_day`
+- [x] `CarData` with `grid_columns`, `grid_rows`, `extra_slot_count`, `stamina_cap`, `fuel_cost_per_day`, `max_weight`, `price`, `icon`, `stats_line()`
+- [x] `CarRegistry` autoload — loads all `CarData` `.tres`; `get_car()` / `get_all_cars()`
+- [x] `SaveManager` — all fields including `active_actions`, `unlocked_perks`, `skill_levels`, `next_entry_id`, `current_day`, `owned_car_ids`
 - [x] `ActiveActionEntry` with `to_dict()` / `from_dict()`; stored as plain Dicts in SaveManager
 - [x] `LotData.super_category_weights` — super-category roll before category roll in `LotEntry._draw_item()`
 - [x] `DaySummaryScene` — standalone scene replacing old `DaySummaryPanel` + `DayPassPopup`
 - [x] Knowledge system — full three-pillar implementation (see `knowledge.md` for details)
 - [x] Data pipeline — direct YAML ↔ TRES with deterministic UIDs, no DB layer
+- [x] `DataPaths` constants class — centralises `res://data/tres/` directory strings for dynamic scans
+- [x] Location system — `LocationData` resource, location select scene, `location_entry` reads from `RunManager.run_record`
+- [x] `location_browse` renamed to `lot_browse`; `game/` reorganised into `shared/` + `run/` + `meta/`
+- [x] Vehicle system — car select (Garage) and car shop; `SaveManager.owned_car_ids` / `buy_car()`; Hub Vehicle button replaces Van popup
+- [x] `ItemListPanel` — reusable sortable table component; `ItemRow.Column` enum; `CargoState` renamed to `SelectionState`
+- [x] `ItemViewContext.PriceMode.BASE_VALUE` added; `show_cargo_stats` removed; column visibility now per-scene via `columns` array
+- [x] `ItemViewContext.for_storage()` factory; `Stage.STORAGE` enum value
+- [x] `LotCard` setup guard (`is_node_ready()` pattern); `ItemRowTooltip` price row and ctx-aware display
+- [x] Vehicle UI refactor — `CarCard` / `CarRow` components; in-place active-car swap in Garage
 
 ## Soon
 
-- [ ] Multiple vehicle configurations selectable from Hub before a run
-- ~~Pre-run cost preview on location browse (entry fee + fuel + travel days)~~ *(moved to `location.md`)*
+- ~~Multiple vehicle configurations selectable from Hub before a run~~ *(done — see Vehicle system)*
+- ~~Pre-run cost preview on location browse (entry fee + fuel + travel days)~~ *(moved to `location_and_lot.md`)*
+
+_None._
 
 ## Later
 

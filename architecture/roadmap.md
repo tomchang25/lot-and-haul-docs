@@ -23,10 +23,17 @@ Hub provides read-only mastery/skills/perks display; Skill Panel allows upgrades
 - X-Ray inspect perk + `ItemEntry.unveil()` consolidation.
 - Data pipeline: direct YAML ↔ TRES with deterministic UIDs, no DB layer.
 - Enhanced YAML validation (item-chain layer checks) + `yaml_stats.py` design balancing tool.
+- Location system — multi-location selection, `LocationData` resource, `location_entry` rewire (see `location_and_lot.md`).
+- `location_browse` → `lot_browse` rename; `game/` reorganised into `shared/` + `run/` + `meta/`.
+- Vehicle system — car select (Garage), car shop, Vehicle Hub, `CarData.price`/`icon`/`stats_line()`, `SaveManager.owned_car_ids`/`buy_car()` (see `vehicle.md`).
+- Vehicle UI refactor — `CarCard`/`CarRow` components; in-place active-car swap; Hub Van→Vehicle button.
+- `ItemListPanel` reusable sortable table; `ItemRow.Column` enum; configurable columns per scene; `CargoState` → `SelectionState`.
+- `ItemViewContext`: `PriceMode.BASE_VALUE` added, `show_cargo_stats` removed, `Stage` enum added, `for_storage()` factory.
+- `DataPaths` constants class — centralises `res://data/tres/` directory paths.
+- `LotCard` setup guard; `ItemRowTooltip` price row and ctx-aware display.
 
 **Immediate next:**
 
-- ~~Pre-run cost preview on location browse (entry fee + fuel + travel days).~~ *(moved to `location.md`)*
 - Selling side: pawn shop / merchant flow so cargo can actually convert to cash beyond on-site sell.
 
 ---
@@ -37,10 +44,11 @@ Hub provides read-only mastery/skills/perks display; Skill Panel allows upgrades
 remaining gap is selling above pawn rate. Without a complete arc from location visit to sale,
 no other system can be meaningfully tested or calibrated.
 
-**Phase 2 — Car system**: `CarConfig` is defined and now carries `fuel_cost_per_day` and
-`max_weight`, but only `van_basic` exists. Car parameters can only be tuned against real packing
-pressure from the v2 cargo grid and real travel cost pressure from the v2 economy. Do not author
-additional `CarConfig` `.tres` files until Phase 1 is fully closed.
+**Phase 2 — Car system** *(mostly done)*: `CarData` carries `fuel_cost_per_day`, `max_weight`,
+`price`, and `icon`. Four cars authored (`van_basic`, `box_truck`, `cargo_hauler`, `semi_rig`).
+Vehicle Hub, Car Select (Garage), and Car Shop are implemented. Remaining: audit cargo scene
+hardcoded constants (`TEMP_GRID_COLS`/`TEMP_GRID_ROWS`) and tune car progression against real
+packing/travel pressure.
 
 **Phase 3 — Content & calibration**: requires genuine run pressure from Phases 1–2 to calibrate.
 What a skill costs, how aggressive an NPC should be, which perks matter — none of these values
@@ -64,7 +72,7 @@ Full design spec and implementation status in `knowledge.md`. Summary:
 
 See `hub_home.md` for full specs on each. Summary:
 
-- **Car System** — car selection from Hub; 2–3 additional `CarConfig` variants. Depends on Phase 1 close.
+- ~~**Car System**~~ — *(done)* car selection from Hub; 4 `CarData` variants authored. See `vehicle.md`.
 - **Bank / Bankruptcy** — daily interest, game-over condition, optional loans. No hard blocker.
 - **Specialist Merchant** — category-filtered sell flow with `MerchantData`. Depends on selling flow.
 - **Merchant Personality** — counter-offer frequency, lock thresholds. Requires merchant base.

@@ -26,11 +26,15 @@ On select: returns to `hub`. On purchase: stays in shop, refreshes owned/active 
 
 `CarData` — see `cargo.md` for the full field list. Already consumed by `RunRecord` (`stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`) and `cargo_scene` (`grid_columns`, `grid_rows`, `max_weight`, `extra_slot_count`). `SaveManager.active_car` getter currently returns the single active car via `CarRegistry`.
 
-Fields still to add:
+Added fields:
 
 ```gdscript
 @export var price: int              # cash cost at the car shop
 @export var icon: Texture2D         # Hub + selection UI
+
+func stats_line() -> String
+# Returns: "Grid: CxR    Weight: W    Stamina: S    Fuel/day: F    Extra slots: E"
+# Shared by CarCard and CarRow components.
 ```
 
 New `SaveManager` state:
@@ -40,13 +44,21 @@ var owned_cars: Array[String] = []  # all cars the player has bought
 var active_car_id: String              # already exists; stays authoritative
 ```
 
-### Car Selection Screen
+### Vehicle Hub
 
-`game/meta/car_select/car_select_scene.gd` + `.tscn` — _not yet implemented._ Reached from Hub before starting a run. Lists `owned_cars` with stat preview (grid dims, stamina, fuel cost, extra slots, max weight). Selecting sets `SaveManager.active_car_id` and returns to Hub.
+`game/meta/vehicle/vehicle_hub.gd` + `.tscn` — navigation menu with Garage, Car Shop, and Back buttons. Mirrors the Knowledge Hub pattern. Back returns to Hub via `GameManager.go_to_hub()`.
+
+### Car Selection Screen (Garage)
+
+`game/meta/vehicle/car_select/car_select_scene.gd` + `.tscn` — lists `SaveManager.owned_cars` as `CarRow` components. The active car shows a green "ACTIVE" label; others show a "Select" button. Selecting a car swaps the active state in place via `_refresh_active_state()` — no row rebuild, no navigation away. Back returns to Vehicle Hub.
+
+`CarRow` (`game/meta/vehicle/car_select/car_row/car_row.gd` + `.tscn`) — `class_name CarRow`, extends `PanelContainer`. Follows the `setup()` / `_apply()` pattern with `is_node_ready()` guard. Displays icon, name, `car.stats_line()`, and toggles between `ActiveLabel` and `SelectButton` based on `is_active`. Emits `select_pressed(car)`.
 
 ### Car Shop
 
-`game/meta/car_shop/car_shop_scene.gd` + `.tscn` — _not yet implemented._ Reached from Hub. Browses purchasable cars, previews stats, buys with cash. Inventory definition TBD: simplest option is "all cars in `data/tres/cars/` that aren't owned"; gated progression can layer on later.
+`game/meta/vehicle/car_shop/car_shop_scene.gd` + `.tscn` — lists all unowned cars as `CarCard` components. Inventory is "all cars in `CarRegistry.get_all_cars()` that aren't in `SaveManager.owned_car_ids`". Balance shown at top. Buy disabled when cash < price. On purchase: card removed, balance refreshed, remaining Buy buttons re-evaluated. Empty-state label shown when all cars owned.
+
+`CarCard` (`game/meta/vehicle/car_shop/car_card/car_card.gd` + `.tscn`) — `class_name CarCard`, extends `PanelContainer`. Displays icon, name, `car.stats_line()`, price, and a Buy button. Emits `buy_pressed(car)`. Follows the standard `setup()` / `_apply()` / `is_node_ready()` pattern.
 
 ### Starter Car Authoring
 
@@ -81,10 +93,16 @@ yet scheduled.
 - [x] Add CarData to Yaml to tres
 - [x] Add 4 `CarData` `.tres` files with distinct progression
 
-- [x] `game/meta/car_select/` scene — stat preview, sets `active_car_id`
+- [x] `game/meta/vehicle/car_select/` scene — stat preview, sets `active_car_id`
 - [x] `CarData.price` and `CarData.icon` fields
+- [x] `CarData.stats_line()` helper — shared by CarCard and CarRow
 - [x] `SaveManager.owned_cars` persistence; append on purchase; migrate existing saves to include the starter car
-- [x] `game/meta/car_shop/` scene — browse purchasable cars, buy with cash
+- [x] `SaveManager.buy_car()` — debit cash, append to owned_car_ids, save
+- [x] `game/meta/vehicle/car_shop/` scene — browse purchasable cars, buy with cash
+- [x] `game/meta/vehicle/vehicle_hub/` — navigation menu (Garage / Car Shop / Back)
+- [x] `CarRow` component — `setup()`/`_apply()` pattern; in-place active-car swap without row rebuild
+- [x] `CarCard` component — `setup()`/`_apply()` pattern; buy button with affordability gating
+- [x] Hub: `VanButton` → `VehicleButton`; `VanPopup` removed; wired to `GameManager.go_to_vehicle_hub()`
 
 ## Soon
 

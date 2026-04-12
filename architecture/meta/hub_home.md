@@ -46,11 +46,15 @@ Buttons:
 - **Next Run** → `GameManager.go_to_location_select()`
 - **Storage** → `GameManager.go_to_storage()`
 - **Pawn Shop** → `GameManager.go_to_pawn_shop()`
-- **Van** → local `AcceptDialog` popup (`VanPopup`) showing van info
+- **Vehicle** → `GameManager.go_to_vehicle_hub()` (see `vehicle.md`)
 - **Knowledge** → `GameManager.go_to_knowledge_hub()` (see `knowledge.md`)
 - **Day Pass** → `ConfirmationDialog` (`DayPassConfirm`) → on confirm, `_do_day_pass()` → `DaySummaryScene`
 
 Returning from `DaySummaryScene` via `GameManager.go_to_hub()` re-runs hub `_ready()`, which calls `_refresh_display()` to update the header.
+
+### Vehicle Hub Entry
+
+`game/meta/vehicle/vehicle_hub.gd` + `.tscn` — navigation menu to Garage (car select) and Car Shop. Back returns to Hub. Full spec in `vehicle.md`.
 
 ### Knowledge Hub Entry
 
@@ -62,8 +66,6 @@ Returning from `DaySummaryScene` via `GameManager.go_to_hub()` re-runs hub `_rea
 
 `DaySummary` (in `game/shared/day_summary/day_summary.gd`) carries `start_day`, `end_day`, `days_elapsed`, run-specific fields (`onsite_proceeds`, `paid_price`, `entry_fee`, `fuel_cost`), universal `living_cost`, and `completed_actions`. `net_change` is a computed property; `has_run_data()` gates the income group.
 
-Displays: day header (`Day X` or `Day X → Day Y` when `days_elapsed > 1`), income group (visible only via `has_run_data()`), expenses (living cost, entry fee, fuel, paid price), completed actions list, net change, current balance. Continue → `GameManager.go_to_hub()`.
-
 ### Storage
 
 `game/meta/storage/storage_scene.gd` + `.tscn` — player manages stored items: queue Market Research, queue Layer Unlock, sell.
@@ -73,7 +75,7 @@ Displays: day header (`Day X` or `Day X → Day Y` when `days_elapsed > 1`), inc
 
 ### Pawn Shop
 
-`game/meta/pawn_shop/` — general-rate selling surface reachable from the hub. Accepts all categories (pawn-shop behaviour), backed by a `MerchantData` resource with an empty `accepted_super_categories`.
+`game/meta/pawn_shop/` — general-rate selling surface reachable from the hub. Accepts all categories (pawn-shop behaviour), backed by a `MerchantData` resource with an empty `accepted_super_categories`. Uses `ItemRow` directly with `PAWN_COLUMNS` (NAME, CONDITION, PRICE) and `SelectionState` for row styling.
 
 ### Merchant Data (baseline)
 
@@ -149,7 +151,7 @@ Before building the museum donation path, decide: what does prestige unlock or a
 
 ### Car system lives in `vehicle.md`
 
-Hub is where vehicle selection and the car shop _surface_ (via the Van button / popup today), but the system doc is `vehicle.md`. This doc only references it.
+Hub is where vehicle selection and the car shop _surface_ (via the Vehicle button → Vehicle Hub), but the system doc is `vehicle.md`. This doc only references it.
 
 ### Reputation and scam flow must be designed together
 
@@ -157,10 +159,10 @@ Scam flow writes to reputation; severity thresholds determine outcome branches. 
 
 ## Done
 
-- [x] Hub scene with Next Run / Storage / Pawn Shop / Van / Knowledge / Day Pass buttons
+- [x] Hub scene with Next Run / Storage / Pawn Shop / Vehicle / Knowledge / Day Pass buttons
 - [x] Hub header displaying Mastery Rank, Balance, and Storage item count
 - [x] Day Pass confirmation dialog → `_do_day_pass()` → `SaveManager.advance_days(1)` → `DaySummaryScene`
-- [x] Van info popup (`AcceptDialog`) reachable from hub
+- [x] Vehicle button on Hub → `GameManager.go_to_vehicle_hub()` (replaced Van info popup)
 - [x] Hub `_refresh_display()` on return from `DaySummaryScene`
 - [x] Knowledge Hub entry scene at `game/meta/knowledge/knowledge_hub.{gd,tscn}` routing to Mastery / Skills / Perks sub-panels
 - [x] `DaySummaryScene` shared by hub day-pass and run-review flows; reads from `GameManager.consume_pending_day_summary()`, falls back to hub if empty
