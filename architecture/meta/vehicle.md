@@ -15,7 +15,7 @@ Make the vehicle a meaningful cross-run investment: which car you drive should c
 ## Writes
 
 - `SaveManager.active_car_id` — updated by the selection screen
-- `SaveManager.owned_cars` (new) — array of owned vehicles; appended on purchase
+- `SaveManager.owned_car_ids` — array of owned vehicle ids; appended on purchase
 - `SaveManager.cash` — debited on purchase
 
 On select: returns to `hub`. On purchase: stays in shop, refreshes owned/active state.
@@ -37,11 +37,13 @@ func stats_line() -> String
 # Shared by CarCard and CarRow components.
 ```
 
-New `SaveManager` state:
+Relevant `SaveManager` state:
 
 ```gdscript
-var owned_cars: Array[String] = []  # all cars the player has bought
 var active_car_id: String              # already exists; stays authoritative
+var owned_car_ids: Array[String] = []  # all cars the player has bought
+var active_car: CarData                # computed getter via CarRegistry.get_car(active_car_id)
+var owned_cars: Array[CarData]         # computed getter: resolves each owned_car_ids entry via CarRegistry
 ```
 
 ### Vehicle Hub

@@ -46,16 +46,15 @@ Three fields total. Category rank, super-category rank, and mastery rank are der
 @export var required_mastery_rank: int = 0                  # 0 = no gate
 ```
 
-`SkillData` — class at `data/definitions/skill_data.gd`; instances at `data/skills/*.tres`:
+`SkillData` — class at `data/definitions/skill_data.gd`; instances at `data/tres/skills/*.tres`:
 
 ```gdscript
 @export var skill_id: String
 @export var display_name: String
-@export var description: String
 @export var levels: Array[SkillLevelData] = []   # index 0 = requirements to reach level 1
 ```
 
-`PerkData` — class at `data/definitions/perk_data.gd`; instances at `data/perks/*.tres`. Loaded into `KnowledgeManager._perk_registry` at `_ready()`.
+`PerkData` — class at `data/definitions/perk_data.gd`; instances at `data/tres/perks/*.tres`. Loaded into `KnowledgeManager._perk_registry` at `_ready()`.
 
 `LayerUnlockAction` gate fields (see item system doc for the full class):
 

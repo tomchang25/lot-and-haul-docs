@@ -30,7 +30,9 @@ Hub provides read-only mastery/skills/perks display; Skill Panel allows upgrades
 - `ItemListPanel` reusable sortable table; `ItemRow.Column` enum; configurable columns per scene; `CargoState` → `SelectionState`.
 - `ItemViewContext`: `PriceMode.BASE_VALUE` added, `show_cargo_stats` removed, `Stage` enum added, `for_storage()` factory.
 - `DataPaths` constants class — centralises `res://data/tres/` directory paths.
+- `LocationRegistry` autoload — mirrors ItemRegistry / CarRegistry pattern for locations.
 - `LotCard` setup guard; `ItemRowTooltip` price row and ctx-aware display.
+- Pawn shop ask-price slider (`ASK_PRICE_MIN_FACTOR` / `ASK_PRICE_MAX_FACTOR`).
 
 **Immediate next:**
 
@@ -88,8 +90,8 @@ See `hub_home.md` for full specs on each. Summary:
 
 ## Post-Demo Targets
 
-- ~~Location selection before entry: multiple warehouses with different item pools and risk profiles~~ _(see `location.md`)_
-- ~~Pre-run intel overlay: tip-off info purchasable at Hub; displayed in warehouse entry before the door opens~~ _(see `location.md`)_
-- ~~Pre-run cost preview: entry fee + fuel + travel days shown on `LotCard` or location selection screen~~ _(see `location.md`)_
-- ~~Arrival animation polish: vehicle pull-up, ambient sound, time-of-day lighting~~ _(see `location.md`)_
+- ~~Location selection before entry: multiple warehouses with different item pools and risk profiles~~ _(see `location_and_lot.md`)_
+- ~~Pre-run intel overlay: tip-off info purchasable at Hub; displayed in warehouse entry before the door opens~~ _(see `location_and_lot.md`)_
+- ~~Pre-run cost preview: entry fee + fuel + travel days shown on `LotCard` or location selection screen~~ _(see `location_and_lot.md`)_
+- ~~Arrival animation polish: vehicle pull-up, ambient sound, time-of-day lighting~~ _(see `location_and_lot.md`)_
 - ~~Warehouse variant support: different exterior images and lot numbers per location~~ _(see `location.md`; `lot_number` already on `LocationData`)_
