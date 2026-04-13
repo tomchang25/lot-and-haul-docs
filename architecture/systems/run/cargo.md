@@ -40,7 +40,7 @@ func total_slots() -> int  # grid_columns * grid_rows
 func stats_line() -> String  # formatted stats string shared by CarCard and CarRow
 ```
 
-`fuel_cost_per_day` is read by `RunRecord.compute_travel_costs()` and combined with `location_data.travel_days` to produce the run's total fuel cost. The legacy `travel_cost` field has been removed. `price` and `icon` are used by the Vehicle system (see `vehicle.md`).
+`fuel_cost_per_day` is read by `RunRecord.compute_travel_costs()` and combined with `location_data.travel_days` to produce the run's total fuel cost. The legacy `travel_cost` field has been removed. `price` and `icon` are used by the Vehicle system (see `../meta/vehicle.md`).
 
 `CargoShapes` — static class at `data/definitions/cargo_shapes.gd`. Single `const SHAPES: Dictionary` mapping `String → Array[Vector2i]`. All cells are normalised so minimum x and y are 0.
 

@@ -24,7 +24,7 @@ On select: returns to `hub`. On purchase: stays in shop, refreshes owned/active 
 
 ### Data Definitions
 
-`CarData` — see `cargo.md` for the full field list. Already consumed by `RunRecord` (`stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`) and `cargo_scene` (`grid_columns`, `grid_rows`, `max_weight`, `extra_slot_count`). `SaveManager.active_car` getter currently returns the single active car via `CarRegistry`.
+`CarData` — see `../run/cargo.md` for the full field list. Already consumed by `RunRecord` (`stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`) and `cargo_scene` (`grid_columns`, `grid_rows`, `max_weight`, `extra_slot_count`). `SaveManager.active_car` getter currently returns the single active car via `CarRegistry`.
 
 Added fields:
 
@@ -83,7 +83,7 @@ The pre-run cost preview built during Location work will already be wired for `f
 ### Related
 
 Vintage-vehicle restoration (auction parts → assemble → sell at car shop, with
-select models becoming drivable) lives in its own doc: `vehicle_restoration.md`.
+select models becoming drivable) lives in its own doc: `../../drafts/features/vehicle_restoration.md`.
 That system is separate from the work-vehicle loop covered here and is not
 yet scheduled.
 
@@ -112,7 +112,7 @@ yet scheduled.
 
 ## Blocked
 
-- [ ] Fuel cost surfaced in pre-run cost preview — blocked on Location system's cost card (see `location_and_lot.md`)
+- [ ] Fuel cost surfaced in pre-run cost preview — blocked on Location system's cost card (see `../run/location_and_lot.md`)
 
 ## Later
 

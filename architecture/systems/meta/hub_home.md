@@ -199,4 +199,4 @@ _None._
 - [ ] Garage Sell scene modelled on `game/run/auction/`
 - [ ] Own Shop — player listings resolved inside `advance_days()`
 - [ ] Bank / Bankruptcy — daily interest inside `advance_days()`, bankruptcy game-over, optional loan UI
-- [ ] Warehouse variant support surfaced in hub (different exteriors and lot counts per location — system doc is `location_and_lot.md`)
+- [ ] Warehouse variant support surfaced in hub (different exteriors and lot counts per location — system doc is `../run/location_and_lot.md`)
