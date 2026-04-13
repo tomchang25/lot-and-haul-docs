@@ -66,19 +66,11 @@ var owned_cars: Array[CarData]         # computed getter: resolves each owned_ca
 
 3–5 `CarData` `.tres` files under `data/tres/cars/` spanning a clear progression — starter van → box truck → semi, or similar — varying cargo grid dimensions, `stamina_cap`, `fuel_cost_per_day`, `extra_slot_count`, and `max_weight`. The progression curve is the primary design lever; individual number tuning comes after the shop exists.
 
-### Run Integration Audit
-
-Cargo scene already reads grid dims from `car_data`, but `TEMP_GRID_COLS` / `TEMP_GRID_ROWS` are hardcoded constants on the cargo scene itself. Audit for other hardcoded constants that should become `CarData` fields before shipping multiple vehicles.
-
 ## Notes
 
 ### Location system ships first
 
 The pre-run cost preview built during Location work will already be wired for `fuel_cost_per_day × travel_days` against the current single active car. When the vehicle shop lands, fuel variety slots into the existing cost card without rework — as long as the selection screen lands before (or alongside) the shop so the "active car" plumbing exists.
-
-### Temp grid may or may not belong on `CarData`
-
-`TEMP_GRID_COLS` / `TEMP_GRID_ROWS` are currently global cargo scene constants. Open question whether larger vehicles should also have a larger temp staging area, or whether temp grid size is a fixed UX affordance unrelated to the vehicle. Decide during the audit step, not in advance.
 
 ### Related
 
@@ -108,7 +100,7 @@ yet scheduled.
 
 ## Soon
 
-- [ ] Audit cargo scene for hardcoded constants (`TEMP_GRID_COLS` / `TEMP_GRID_ROWS`, etc.) that should move to `CarData`
+_None._
 
 ## Blocked
 
