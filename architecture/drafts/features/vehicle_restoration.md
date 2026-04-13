@@ -5,7 +5,7 @@
 Collectible subsystem: vehicle parts appear in auction lots, players collect
 full sets across runs, assemble them in a dedicated garage, and sell finished
 vehicles (or occasionally drive them) through the Car Shop. Separate from the
-work-vehicle system in `vehicle.md` — that doc covers the vans/trucks the
+work-vehicle system in `../../systems/meta/vehicle.md` — that doc covers the vans/trucks the
 player buys to run warehouses; this doc covers vintage restoration as a
 collector loop.
 

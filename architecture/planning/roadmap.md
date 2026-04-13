@@ -18,14 +18,14 @@ Hub provides read-only mastery/skills/perks display; Skill Panel allows upgrades
 - Three-component travel cost (`entry_fee`, `fuel_cost`, living cost over `travel_days`).
 - Storage popup UX fixes (always-visible Unlock with disabled-reason tooltips, status label, slot HUD).
 - Action durations: `RESEARCH_DAYS` per rarity, `LayerUnlockAction.unlock_days`.
-- Knowledge system — full three-pillar implementation (see `knowledge.md`).
+- Knowledge system — full three-pillar implementation (see `../systems/meta/knowledge.md`).
 - Knowledge Hub → Mastery / Skills / Perks navigation structure.
 - X-Ray inspect perk + `ItemEntry.unveil()` consolidation.
 - Data pipeline: direct YAML ↔ TRES with deterministic UIDs, no DB layer.
 - Enhanced YAML validation (item-chain layer checks) + `yaml_stats.py` design balancing tool.
-- Location system — multi-location selection, `LocationData` resource, `location_entry` rewire (see `location_and_lot.md`).
+- Location system — multi-location selection, `LocationData` resource, `location_entry` rewire (see `../systems/run/location_and_lot.md`).
 - `location_browse` → `lot_browse` rename; `game/` reorganised into `shared/` + `run/` + `meta/`.
-- Vehicle system — car select (Garage), car shop, Vehicle Hub, `CarData.price`/`icon`/`stats_line()`, `SaveManager.owned_car_ids`/`buy_car()` (see `vehicle.md`).
+- Vehicle system — car select (Garage), car shop, Vehicle Hub, `CarData.price`/`icon`/`stats_line()`, `SaveManager.owned_car_ids`/`buy_car()` (see `../systems/meta/vehicle.md`).
 - Vehicle UI refactor — `CarCard`/`CarRow` components; in-place active-car swap; Hub Van→Vehicle button.
 - `ItemListPanel` reusable sortable table; `ItemRow.Column` enum; configurable columns per scene; `CargoState` → `SelectionState`.
 - `ItemViewContext`: `PriceMode.BASE_VALUE` added, `show_cargo_stats` removed, `Stage` enum added, `for_storage()` factory.
@@ -60,7 +60,7 @@ stabilise until earlier systems impose real constraints on a run.
 
 ## Knowledge System
 
-Full design spec and implementation status in `knowledge.md`. Summary:
+Full design spec and implementation status in `../systems/meta/knowledge.md`. Summary:
 
 - **Mastery**: passive, earned by handling items. Four-layer derived hierarchy (category points → category rank → super-category rank → mastery rank). Implemented.
 - **Skill**: active, earned by spending cash. 0–5 ladder per skill with mastery prerequisites. Implemented (Hub Skill Panel, `try_upgrade_skill()`, `AdvanceCheck` enum).
@@ -72,16 +72,16 @@ Full design spec and implementation status in `knowledge.md`. Summary:
 
 ## Deferred Systems
 
-See `hub_home.md` for full specs on each. Summary:
+See `../systems/meta/hub_home.md` for full specs on each. Summary:
 
-- ~~**Car System**~~ — _(done)_ car selection from Hub; 4 `CarData` variants authored. See `vehicle.md`.
+- ~~**Car System**~~ — _(done)_ car selection from Hub; 4 `CarData` variants authored. See `../systems/meta/vehicle.md`.
 - **Bank / Bankruptcy** — daily interest, game-over condition, optional loans. No hard blocker.
 - **Specialist Merchant** — category-filtered sell flow with `MerchantData`. Depends on selling flow.
 - **Merchant Personality** — counter-offer frequency, lock thresholds. Requires merchant base.
 - **Garage Sell** — another auction-type scene. Deferred for scope.
 - **Reputation + Scam Flow** — faction reputation, scam detection branches. Requires `MerchantData`.
 - **Own Shop** — player-listed items, sell frequency vs. market rate. Depends on selling flow.
-- **Expert Network (Appraisers)** — design question unresolved (see `hub_home.md`).
+- **Expert Network (Appraisers)** — design question unresolved (see `../systems/meta/hub_home.md`).
 - **Museum / Prestige** — prestige design decisions needed first.
 - **Auction Modifier: All-Base-Layer Run** — requires auction modifier system design.
 - **Training Courses** — `TrainingCourseData` resource, hub Training button. Deferred.
@@ -90,8 +90,4 @@ See `hub_home.md` for full specs on each. Summary:
 
 ## Post-Demo Targets
 
-- ~~Location selection before entry: multiple warehouses with different item pools and risk profiles~~ _(see `location_and_lot.md`)_
-- ~~Pre-run intel overlay: tip-off info purchasable at Hub; displayed in warehouse entry before the door opens~~ _(see `location_and_lot.md`)_
-- ~~Pre-run cost preview: entry fee + fuel + travel days shown on `LotCard` or location selection screen~~ _(see `location_and_lot.md`)_
-- ~~Arrival animation polish: vehicle pull-up, ambient sound, time-of-day lighting~~ _(see `location_and_lot.md`)_
-- ~~Warehouse variant support: different exterior images and lot numbers per location~~ _(see `location.md`; `lot_number` already on `LocationData`)_
+_None._

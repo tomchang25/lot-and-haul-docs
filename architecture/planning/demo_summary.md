@@ -44,7 +44,7 @@ starting over with a new location.
 | -------------------- | ------ | ------------------------------------------------------------------------------------ |
 | Director system      | New    | Fixed-seed runs with phase triggers; wraps existing RunRecord and location browse    |
 | Dialog system        | New    | Linear with simple branching for Uncle's two reactions; data-driven from the start   |
-| Skill system         | Done   | Full three-pillar knowledge system implemented (see knowledge.md)                    |
+| Skill system         | Done   | Full three-pillar knowledge system implemented (see ../systems/meta/knowledge.md)                    |
 | Perk system          | Done   | Registry, X-ray perk, `has_perk()` API all implemented                               |
 | X-ray inspect action | Done   | 3 SP action in inspection scene; gated by `xray_inspect` perk; uses `entry.unveil()` |
 | Pawn shop v2         | New    | Full sell flow with MerchantData; replaces on-site flat sell as the cash-out point   |
