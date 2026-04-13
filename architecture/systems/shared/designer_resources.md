@@ -151,5 +151,4 @@ _None._
 
 ## Later
 
-- [ ] `TrainingCourseData` resource + course registry; hub Training button + course list UI
 - [ ] More perk content and acquisition triggers

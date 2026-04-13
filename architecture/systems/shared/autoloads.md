@@ -6,23 +6,23 @@ Autoloads, save system, registries, hub navigation, and data pipeline shared acr
 
 ## Autoloads
 
-| Autoload           | File                                   | Role                                                                                                                                                                              |
-| ------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GameManager`      | `global/autoload/game_manager/`        | Scene transitions only. All `go_to_*()` methods. Holds `_pending_day_summary` for inter-scene data passing. Does not hold run state.                                              |
-| `RunManager`       | `global/autoload/run_manager.gd`       | Holds `run_record: RunRecord`. Null between runs.                                                                                                                                 |
-| `SaveManager`      | `global/autoload/save_manager.gd`      | Persistent cross-run data: cash, storage, category points, skill levels, perks.                                                                                                   |
+| Autoload           | File                                   | Role                                                                                                                                                                                      |
+| ------------------ | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GameManager`      | `global/autoload/game_manager/`        | Scene transitions only. All `go_to_*()` methods. Holds `_pending_day_summary` for inter-scene data passing. Does not hold run state.                                                      |
+| `RunManager`       | `global/autoload/run_manager.gd`       | Holds `run_record: RunRecord`. Null between runs.                                                                                                                                         |
+| `SaveManager`      | `global/autoload/save_manager.gd`      | Persistent cross-run data: cash, storage, category points, skill levels, perks.                                                                                                           |
 | `KnowledgeManager` | `global/autoload/knowledge_manager.gd` | Three knowledge pillars: category mastery (passive), skill levels (trained), perk registry (granted). Also price ranges and layer unlock checks. See `../meta/knowledge.md` for full API. |
-| `ItemRegistry`     | `global/autoload/item_registry.gd`     | Lookup table for all `ItemData` resources; super-category reverse index.                                                                                                          |
-| `CarRegistry`      | `global/autoload/car_registry.gd`      | Loads all `CarData` `.tres` from `data/tres/cars/`. Exposes `get_car(id)` / `get_all_cars()`.                                                                                     |
-| `LocationRegistry` | `global/autoload/location_registry.gd` | Loads all `LocationData` `.tres` from `data/tres/locations/`. Exposes `get_location(id)` / `get_all_locations()`.                                                                  |
-| `AudioManager`     | `global/autoload/audio_manager/`       | Audio bus wrappers and event types.                                                                                                                                               |
-| `EventBus`         | `global/autoload/event_bus.gd`         | Cross-scene signal bus.                                                                                                                                                           |
+| `ItemRegistry`     | `global/autoload/item_registry.gd`     | Lookup table for all `ItemData` resources; super-category reverse index.                                                                                                                  |
+| `CarRegistry`      | `global/autoload/car_registry.gd`      | Loads all `CarData` `.tres` from `data/tres/cars/`. Exposes `get_car(id)` / `get_all_cars()`.                                                                                             |
+| `LocationRegistry` | `global/autoload/location_registry.gd` | Loads all `LocationData` `.tres` from `data/tres/locations/`. Exposes `get_location(id)` / `get_all_locations()`.                                                                         |
+| `AudioManager`     | `global/autoload/audio_manager/`       | Audio bus wrappers and event types.                                                                                                                                                       |
+| `EventBus`         | `global/autoload/event_bus.gd`         | Cross-scene signal bus.                                                                                                                                                                   |
 
 ### Constants (accessed by `class_name`, not autoloads)
 
-| Class       | File                             | Role                                                                                                                      |
-| ----------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `Economy`   | `global/constants/economy.gd`    | `DAILY_BASE_COST` and other economy constants.                                                                            |
+| Class       | File                             | Role                                                                                                                                  |
+| ----------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `Economy`   | `global/constants/economy.gd`    | `DAILY_BASE_COST` and other economy constants.                                                                                        |
 | `DataPaths` | `global/constants/data_paths.gd` | Single source of truth for `res://data/tres/` directory strings: `ITEMS_DIR`, `PERKS_DIR`, `SKILLS_DIR`, `LOCATIONS_DIR`, `CARS_DIR`. |
 
 ---
@@ -130,9 +130,6 @@ No database layer — the old SQLite pipeline has been removed.
 - [x] Vehicle system — car select (Garage) and car shop; `SaveManager.owned_car_ids` / `buy_car()`; Hub Vehicle button replaces Van popup
 
 ## Soon
-
-- ~~Multiple vehicle configurations selectable from Hub before a run~~ _(done — see Vehicle system)_
-- ~~Pre-run cost preview on location browse (entry fee + fuel + travel days)~~ _(moved to `../run/location_and_lot.md`)_
 
 _None._
 

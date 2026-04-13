@@ -251,7 +251,7 @@ The debug overlay is gated to debug builds on purpose — exposing the true pric
 
 ## Soon
 
-- [ ] Run review: per-item inspection context ("You never examined this")
+_None._
 
 ## Blocked
 

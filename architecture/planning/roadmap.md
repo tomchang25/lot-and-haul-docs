@@ -90,8 +90,4 @@ See `../systems/meta/hub_home.md` for full specs on each. Summary:
 
 ## Post-Demo Targets
 
-- ~~Location selection before entry: multiple warehouses with different item pools and risk profiles~~ _(see `../systems/run/location_and_lot.md`)_
-- ~~Pre-run intel overlay: tip-off info purchasable at Hub; displayed in warehouse entry before the door opens~~ _(see `../systems/run/location_and_lot.md`)_
-- ~~Pre-run cost preview: entry fee + fuel + travel days shown on `LotCard` or location selection screen~~ _(see `../systems/run/location_and_lot.md`)_
-- ~~Arrival animation polish: vehicle pull-up, ambient sound, time-of-day lighting~~ _(see `../systems/run/location_and_lot.md`)_
-- ~~Warehouse variant support: different exterior images and lot numbers per location~~ _(see `location.md`; `lot_number` already on `LocationData`)_
+_None._

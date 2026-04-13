@@ -167,7 +167,6 @@ Trailer slots are meant to be the "escape valve" for heavy oddball wins — cons
 
 ## Soon
 
-- ~~Multiple vehicle configurations selectable from Hub before a run~~ *(done — see `vehicle.md`)*
 - [ ] Vehicle types reflected in game run check
 
 ## Blocked
