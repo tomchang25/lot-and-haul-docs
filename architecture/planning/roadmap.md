@@ -62,6 +62,38 @@ Two remaining steps:
 - Append fulfilled items to `merchant.completed_order_ids`.
 - Extend the deferred negotiation result display to show the bonus breakdown.
 
+  **Special order system V2**
+
+Why: The initial per-item bonus design reduced orders to passive rewards on
+incidental sales, producing no new decisions on top of the specialist merchant
+multipliers already in place. Orders need to function as active mini-objectives
+with a real trade-off against normal sales, and serve as a foundation for the
+later reputation and faction systems.
+
+- **Two order archetypes** — Premium orders demand a small count of items with
+  rarity and condition gates, priced off condition value at a high buff. Bulk
+  orders demand larger quantities without gates, priced off base value at a flat
+  below-market buff. Both ignore market factor so orders stay viable when the
+  market is depressed.
+- **Dedicated fulfillment panel** — Order turn-in happens in a separate panel
+  distinct from the normal sale flow. Item slots show live per-item price
+  previews as items are assigned, and total payout resolves before confirmation.
+- **Partial fulfillment for bulk, all-or-nothing for premium** — Bulk orders
+  accept incremental delivery across visits and pay per item on each turn-in,
+  with a completion bonus when all slots fill. Premium orders require a single
+  full turn-in and pay out only on completion; the high per-item buff is itself
+  the incentive.
+- **Transparent buff, dynamic price** — The order displays only its buff
+  multiplier and completion bonus up front. Per-item prices are computed as
+  items are slotted in, placing the valuation judgment at the moment of
+  decision rather than in advance.
+- **Cycle-based rotation with deadlines** — Each merchant rolls new orders on a
+  personality-specific cadence, and each order carries its own deadline
+  independent of the roll cycle. Orders can overlap, forcing the player to
+  triage which to pursue.
+- **Reputation foundation** — Completed orders are recorded per merchant as the
+  hook for the later reputation and faction systems.
+
 ### Immediate next — Other systems
 
 - **Director system skeleton** — get all three runs flowing end-to-end with placeholder content first.
