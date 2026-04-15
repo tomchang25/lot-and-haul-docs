@@ -8,22 +8,24 @@ Autoloads, save system, registries, hub navigation, and data pipeline shared acr
 
 | Autoload           | File                                   | Role                                                                                                                                                                                      |
 | ------------------ | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GameManager`      | `global/autoload/game_manager/`        | Scene transitions only. All `go_to_*()` methods. Holds `_pending_day_summary` for inter-scene data passing. Does not hold run state.                                                      |
+| `GameManager`      | `global/autoload/game_manager/`        | Scene transitions only. All `go_to_*()` methods. Holds `_pending_day_summary` and `_pending_merchant` for inter-scene data passing. Does not hold run state.                              |
 | `RunManager`       | `global/autoload/run_manager.gd`       | Holds `run_record: RunRecord`. Null between runs.                                                                                                                                         |
 | `SaveManager`      | `global/autoload/save_manager.gd`      | Persistent cross-run data: cash, storage, category points, skill levels, perks.                                                                                                           |
 | `KnowledgeManager` | `global/autoload/knowledge_manager.gd` | Three knowledge pillars: category mastery (passive), skill levels (trained), perk registry (granted). Also price ranges and layer unlock checks. See `../meta/knowledge.md` for full API. |
 | `ItemRegistry`     | `global/autoload/item_registry.gd`     | Lookup table for all `ItemData` resources; super-category reverse index.                                                                                                                  |
 | `CarRegistry`      | `global/autoload/car_registry.gd`      | Loads all `CarData` `.tres` from `data/tres/cars/`. Exposes `get_car(id)` / `get_all_cars()`.                                                                                             |
 | `LocationRegistry` | `global/autoload/location_registry.gd` | Loads all `LocationData` `.tres` from `data/tres/locations/`. Exposes `get_location(id)` / `get_all_locations()`.                                                                         |
+| `MarketManager`    | `global/autoload/market_manager.gd`    | Daily market factors per category. Random-walks super-category means, resamples per-category factors. `advance_market(days)` called from `SaveManager.advance_days()`.                    |
+| `MerchantRegistry` | `global/autoload/merchant_registry.gd` | Loads all `MerchantData` `.tres` from `data/tres/merchants/`. Manages special orders, daily negotiation budgets. `advance_day()` called from `SaveManager.advance_days()`.                |
 | `AudioManager`     | `global/autoload/audio_manager/`       | Audio bus wrappers and event types.                                                                                                                                                       |
-| `EventBus`         | `global/autoload/event_bus.gd`         | Cross-scene signal bus.                                                                                                                                                                   |
+| `EventBus`         | `global/autoload/event_bus.gd`         | Cross-scene signal bus (placeholder — currently empty).                                                                                                                                   |
 
 ### Constants (accessed by `class_name`, not autoloads)
 
 | Class       | File                             | Role                                                                                                                                  |
 | ----------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `Economy`   | `global/constants/economy.gd`    | `DAILY_BASE_COST` and other economy constants.                                                                                        |
-| `DataPaths` | `global/constants/data_paths.gd` | Single source of truth for `res://data/tres/` directory strings: `ITEMS_DIR`, `PERKS_DIR`, `SKILLS_DIR`, `LOCATIONS_DIR`, `CARS_DIR`. |
+| `Economy`   | `global/constants/economy.gd`    | `DAILY_BASE_COST`, `LOCATION_SAMPLE_SIZE`, and other economy constants.                                                                                       |
+| `DataPaths` | `global/constants/data_paths.gd` | Single source of truth for `res://data/tres/` directory strings: `ITEMS_DIR`, `PERKS_DIR`, `SKILLS_DIR`, `LOCATIONS_DIR`, `LOTS_DIR`, `CARS_DIR`, `MERCHANTS_DIR`. |
 
 ---
 
@@ -47,6 +49,7 @@ var current_day: int
 var max_concurrent_actions: int   # default 2; base value, can be raised by perks
 var next_entry_id: int            # monotonically increasing; never reset or reused
 var active_actions: Array         # Array of plain Dictionaries; see ActiveActionEntry
+var available_location_ids: Array[String] = []   # rolled each day advance via roll_available_locations()
 ```
 
 ### Key methods
@@ -60,8 +63,11 @@ func register_storage_items(entries: Array[ItemEntry]) -> void
 func buy_car(car: CarData) -> bool
 # Returns false if cash < price or already owned.
 # On success: debit cash, append id to owned_car_ids, save(), return true.
+func roll_available_locations() -> void
+# Shuffles all location IDs, picks Economy.LOCATION_SAMPLE_SIZE.
 func advance_days(n: int) -> DaySummary
-# Deducts living cost, ticks active actions, returns a summary of what happened.
+# Deducts living cost, ticks active actions, advances market (MarketManager),
+# advances merchants (MerchantRegistry), re-rolls available locations, saves.
 ```
 
 ### Serialised ItemEntry fields
@@ -79,8 +85,11 @@ func get_items(rarity: Rarity, category_id: String) -> Array[ItemData]
 func get_all_items() -> Array[ItemData]
 func get_categories_for_super(super_category_id: String) -> Array[String]
 func get_all_super_category_ids() -> Array[String]
+func get_all_category_ids() -> Array[String]
 func get_super_category_display_name(super_category_id: String) -> String
 func get_category_display_name(category_id: String) -> String
+func get_super_category_data(super_category_id: String) -> SuperCategoryData
+func size() -> int
 ```
 
 Builds a `super_category_id → Array[category_id]` reverse map at `_ready()`.
@@ -93,7 +102,8 @@ Builds a `super_category_id → Array[category_id]` reverse map at `_ready()`.
 Hub
  ├── Location Select → run loop (location_entry → lot_browse → … → run_review)
  ├── Storage (manage items, queue actions)
- ├── Pawn Shop (general-rate selling)
+ ├── Merchant Hub
+ │    └── Merchant Shop (basket negotiation per merchant; includes pawn shop)
  ├── Vehicle Hub
  │    ├── Garage / Car Select (select active car from owned cars)
  │    └── Car Shop (buy new cars with cash)
@@ -121,13 +131,17 @@ No database layer — the old SQLite pipeline has been removed.
 - [x] `GameManager` / `RunManager` / `SaveManager` separated; `go_to_*()` on GameManager only
 - [x] `CarRegistry` autoload — loads all `CarData` `.tres`; `get_car()` / `get_all_cars()`
 - [x] `LocationRegistry` autoload — loads all `LocationData` `.tres`; `get_location()` / `get_all_locations()`
-- [x] `SaveManager` — all fields including `active_actions`, `unlocked_perks`, `skill_levels`, `next_entry_id`, `current_day`, `owned_car_ids`
+- [x] `MarketManager` autoload — daily market factors per category via random walk on super-category means
+- [x] `MerchantRegistry` autoload — loads all `MerchantData` `.tres`; manages special orders, negotiation budgets, day-advance orchestration
+- [x] `SaveManager` — all fields including `active_actions`, `unlocked_perks`, `skill_levels`, `next_entry_id`, `current_day`, `owned_car_ids`, `available_location_ids`
+- [x] `SaveManager` persists `MarketManager` state (`super_cat_means`, `category_factors_today`) and per-merchant `negotiations_used_today`
 - [x] Knowledge system — full three-pillar implementation (see `../meta/knowledge.md` for details)
 - [x] Data pipeline — direct YAML ↔ TRES with deterministic UIDs, no DB layer
-- [x] `DataPaths` constants class — centralises `res://data/tres/` directory strings for dynamic scans
+- [x] `DataPaths` constants class — centralises `res://data/tres/` directory strings for dynamic scans (including `LOTS_DIR`, `MERCHANTS_DIR`)
 - [x] Location system — `LocationData` resource, location select scene, `location_entry` reads from `RunManager.run_record`
 - [x] `location_browse` renamed to `lot_browse`; `game/` reorganised into `shared/` + `run/` + `meta/`
 - [x] Vehicle system — car select (Garage) and car shop; `SaveManager.owned_car_ids` / `buy_car()`; Hub Vehicle button replaces Van popup
+- [x] Merchant system — merchant hub, merchant shop with basket negotiation, negotiation dialog; replaces old Pawn Shop standalone scene
 
 ## Soon
 

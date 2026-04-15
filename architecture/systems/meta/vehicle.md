@@ -29,6 +29,9 @@ On select: returns to `hub`. On purchase: stays in shop, refreshes owned/active 
 Added fields:
 
 ```gdscript
+@export var trailer_damage_chance: float = 0.0    # probability each trailer item takes damage
+@export var trailer_damage_ratio_min: float = 0.0 # minimum condition fraction lost
+@export var trailer_damage_ratio_max: float = 0.0 # maximum condition fraction lost
 @export var price: int              # cash cost at the car shop
 @export var icon: Texture2D         # Hub + selection UI
 

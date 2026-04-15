@@ -9,12 +9,17 @@ Designer-authored Resource definitions used across all blocks.
 ### `SuperCategoryData` (`data/definitions/super_category_data.gd`)
 
 ```gdscript
-@export var super_category_id: String   # snake_case; matches .tres filename stem
-@export var display_name: String        # e.g. "Fine Art", "Vehicle"
+@export var super_category_id: String       # snake_case; matches .tres filename stem
+@export var display_name: String            # e.g. "Fine Art", "Vehicle"
+@export var market_mean_min: float = 0.7    # lower bound for drifting mean
+@export var market_mean_max: float = 1.3    # upper bound for drifting mean
+@export var market_stddev: float = 0.02     # std dev for daily category factor resampling
+@export var market_drift_per_day: float = 0.05  # Gaussian step std dev for daily random walk
 ```
 
 `.tres` files under `data/super_categories/`.
 `ItemRegistry` builds a reverse index (`super_category_id → Array[category_id]`) at startup.
+`MarketManager` reads the market tuning fields to drive per-category price factors.
 
 ### `CategoryData` (`data/definitions/category_data.gd`)
 
@@ -90,6 +95,7 @@ enum ActionContext { AUTO, HOME }
 ### `LotData` (`data/definitions/lot_data.gd`)
 
 ```gdscript
+@export var lot_id: String                     # stable identifier
 @export var aggressive_factor_min: float       # default 0.3
 @export var aggressive_factor_max: float       # default 0.7
 @export var aggressive_lerp_min: float         # default 0.8
@@ -120,6 +126,9 @@ enum ActionContext { AUTO, HOME }
 @export var stamina_cap: int
 @export var fuel_cost_per_day: int = 0
 @export var extra_slot_count: int = 0
+@export var trailer_damage_chance: float = 0.0    # probability each trailer item takes damage
+@export var trailer_damage_ratio_min: float = 0.0 # minimum condition fraction lost
+@export var trailer_damage_ratio_max: float = 0.0 # maximum condition fraction lost
 @export var price: int = 0             # cash cost at the car shop
 @export var icon: Texture2D            # Hub + selection UI
 
@@ -128,6 +137,49 @@ func stats_line() -> String  # "Grid: CxR    Weight: W    Stamina: S    Fuel/day
 ```
 
 `.tres` files under `data/tres/cars/`. `CarRegistry` autoload loads all `.tres` from that directory and exposes `get_car(id)` / `get_all_cars()`. `SaveManager.active_car_id` points to the active config.
+
+### `LocationData` (`data/definitions/location_data.gd`)
+
+```gdscript
+@export var location_id: String
+@export var display_name: String
+@export var description: String
+@export var entry_fee: int = 0
+@export var travel_days: int = 1         # round-trip days consumed by advance_days()
+@export var lot_number: int = 3          # lots sampled per visit
+@export var lot_pool: Array[LotData] = []
+```
+
+`.tres` files under `data/tres/locations/`. `LocationRegistry` autoload loads all `.tres` and exposes `get_location(id)` / `get_all_locations()`. See `../run/location_and_lot.md` for usage.
+
+### `MerchantData` (`data/definitions/merchant_data.gd`)
+
+```gdscript
+@export var merchant_id: String
+@export var display_name: String
+@export var description: String              # short flavour text for hub card
+@export var accepted_super_categories: Array[SuperCategoryData] = []
+@export var price_multiplier: float = 1.0    # applied to market_price for in-spec items
+@export var accepts_off_category: bool = false
+@export var off_category_multiplier: float = 0.5
+@export var ceiling_multiplier_min: float = 1.1   # bounds for basket offer ceiling
+@export var ceiling_multiplier_max: float = 1.3
+@export var anger_max: float = 100.0         # session anger cap
+@export var anger_k: float = 20.0            # gain coefficient for proposal-greed anger
+@export var anger_per_round: float = 20.0    # flat anger per submission
+@export var counter_aggressiveness: float = 0.3  # fraction of gap closed per counter
+@export var negotiation_per_day: int = 1
+@export var special_order_pool: Array[ItemData] = []
+@export var special_order_count: int = 2
+@export var special_order_bonus: float = 0.25
+@export var required_perk_id: String = ""
+
+func offer_for(entry: ItemEntry) -> int
+# Returns market_price × price_multiplier for in-spec items,
+# market_price × off_category_multiplier for off-category (if accepted), else 0.
+```
+
+`.tres` files under `data/tres/merchants/`. `MerchantRegistry` autoload loads all `.tres` and exposes `get_merchant(id)` / `get_all_merchants()` / `get_available_merchants()`. See `../meta/hub_home.md` for full merchant system spec.
 
 ---
 
@@ -138,8 +190,12 @@ func stats_line() -> String  # "Grid: CxR    Weight: W    Stamina: S    Fuel/day
 - [x] `CategoryData` with `shape_id` and `get_cells()`
 - [x] `ItemData.rarity` enum — lot-draw filter only, never displayed
 - [x] `LayerUnlockAction` with full gate set: `context`, `required_skill`, `required_level`, `required_condition`, `required_category_rank`, `required_perk_id`
-- [x] `CarData` with `grid_columns`, `grid_rows`, `extra_slot_count`, `stamina_cap`, `fuel_cost_per_day`, `max_weight`, `price`, `icon`, `stats_line()`
+- [x] `CarData` with `grid_columns`, `grid_rows`, `extra_slot_count`, `stamina_cap`, `fuel_cost_per_day`, `max_weight`, `price`, `icon`, `stats_line()`, `trailer_damage_chance/ratio_min/ratio_max`
 - [x] `LotData.super_category_weights` — super-category roll before category roll in `LotEntry._draw_item()`
+- [x] `LotData.lot_id` field
+- [x] `SuperCategoryData` market tuning fields: `market_mean_min`, `market_mean_max`, `market_stddev`, `market_drift_per_day`
+- [x] `LocationData` resource with `location_id`, `display_name`, `description`, `entry_fee`, `travel_days`, `lot_number`, `lot_pool`
+- [x] `MerchantData` resource with full negotiation tuning, special orders, pricing logic, and perk gates
 
 ## Soon
 

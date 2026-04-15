@@ -14,7 +14,7 @@ components never branch on stage directly — they read only the mode fields.
 ```gdscript
 enum ConditionMode { RESPECT_INSPECT_LEVEL, FORCE_INSPECT_MAX, FORCE_TRUE_VALUE }
 enum PotentialMode { RESPECT_INSPECT_LEVEL, FORCE_FULL }
-enum PriceMode     { CURRENT_ESTIMATE, SELL_PRICE, BASE_VALUE }
+enum PriceMode     { ESTIMATED_VALUE, APPRAISED_VALUE, BASE_VALUE, MERCHANT_OFFER }
 
 enum Stage {
     INSPECTION,
@@ -23,7 +23,10 @@ enum Stage {
     CARGO,
     RUN_REVIEW,
     STORAGE,
+    MERCHANT_SHOP,
 }
+
+var merchant: MerchantData = null   # set only by for_merchant_shop(); used by MERCHANT_OFFER price mode
 ```
 
 Column visibility is no longer driven by `show_cargo_stats` — each consuming scene passes
@@ -32,14 +35,15 @@ its own `columns: Array` of `ItemRow.Column` values to `ItemRow.setup()` and
 
 ### Factories
 
-| Factory             | Condition         | Potential  | Price            | Stage       |
-| ------------------- | ----------------- | ---------- | ---------------- | ----------- |
-| `for_inspection()`  | RESPECT           | RESPECT    | CURRENT_ESTIMATE | INSPECTION  |
-| `for_list_review()` | RESPECT           | RESPECT    | CURRENT_ESTIMATE | LIST_REVIEW |
-| `for_reveal()`      | FORCE_INSPECT_MAX | FORCE_FULL | CURRENT_ESTIMATE | REVEAL      |
-| `for_cargo()`       | FORCE_INSPECT_MAX | FORCE_FULL | CURRENT_ESTIMATE | CARGO       |
-| `for_run_review()`  | FORCE_TRUE_VALUE  | FORCE_FULL | SELL_PRICE       | RUN_REVIEW  |
-| `for_storage()`     | FORCE_TRUE_VALUE  | FORCE_FULL | SELL_PRICE       | STORAGE     |
+| Factory                      | Condition         | Potential  | Price           | Stage         |
+| ---------------------------- | ----------------- | ---------- | --------------- | ------------- |
+| `for_inspection()`           | RESPECT           | RESPECT    | ESTIMATED_VALUE | INSPECTION    |
+| `for_list_review()`          | RESPECT           | RESPECT    | ESTIMATED_VALUE | LIST_REVIEW   |
+| `for_reveal()`               | RESPECT           | RESPECT    | ESTIMATED_VALUE | REVEAL        |
+| `for_cargo()`                | FORCE_INSPECT_MAX | FORCE_FULL | ESTIMATED_VALUE | CARGO         |
+| `for_run_review()`           | FORCE_TRUE_VALUE  | FORCE_FULL | APPRAISED_VALUE | RUN_REVIEW    |
+| `for_storage()`              | FORCE_TRUE_VALUE  | FORCE_FULL | APPRAISED_VALUE | STORAGE       |
+| `for_merchant_shop(merchant)` | FORCE_TRUE_VALUE  | FORCE_FULL | MERCHANT_OFFER  | MERCHANT_SHOP |
 
 ---
 
@@ -53,10 +57,11 @@ Generalised item row used by list_review, reveal, run_review, storage, and pawn_
 enum Column {
     NAME,
     CONDITION,
-    PRICE,       # header text is dynamic via get_price_header(ctx)
+    PRICE,          # header text is dynamic via get_price_header(ctx)
     POTENTIAL,
     WEIGHT,
     GRID,
+    MARKET_FACTOR,  # displays today's demand delta (e.g. "+12%")
 }
 ```
 
@@ -64,7 +69,8 @@ enum Column {
 
 ```gdscript
 static func get_price_header(ctx: ItemViewContext) -> String
-# Returns "Est. Value" / "Sell Price" / "Base Value" depending on ctx.price_mode.
+# Returns "Est. Value" / "Appraised Value" / "Base Value" / "<merchant> Offer"
+# depending on ctx.price_mode.
 ```
 
 ### SelectionState (renamed from CargoState)
@@ -128,6 +134,10 @@ Header buttons are runtime-built from the `columns` array (permitted exception u
 - [x] `ItemViewContext.for_storage()` factory; `Stage.STORAGE` enum value
 - [x] `LotCard` setup guard (`is_node_ready()` pattern); `ItemRowTooltip` price row and ctx-aware display
 - [x] Vehicle UI refactor — `CarCard` / `CarRow` components; in-place active-car swap in Garage
+- [x] `PriceMode` renamed: `CURRENT_ESTIMATE` → `ESTIMATED_VALUE`, `SELL_PRICE` → `APPRAISED_VALUE`; added `MERCHANT_OFFER`
+- [x] `Stage.MERCHANT_SHOP` and `for_merchant_shop(merchant)` factory; `merchant: MerchantData` field on context
+- [x] `Column.MARKET_FACTOR` — displays market demand delta per category
+- [x] `for_reveal()` modes changed to `RESPECT_INSPECT_LEVEL` for both condition and potential (previously `FORCE` modes)
 
 ## Soon
 

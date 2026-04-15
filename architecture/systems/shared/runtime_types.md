@@ -16,6 +16,7 @@ var lot_entry: LotEntry                  # null until set_lot() is called
 var lot_items: Array[ItemEntry]          # computed: lot_entry.item_entries or []
 var won_items: Array[ItemEntry]          # accumulates across all won lots this visit
 var cargo_items: Array[ItemEntry]        # subset chosen in cargo scene
+var trailer_items: Array[ItemEntry]     # items placed in extra slots
 var last_lot_won_items: Array[ItemEntry] # latest lot only; used by reveal_scene
 
 var onsite_proceeds: int                 # cash from on-site sales in cargo scene
@@ -113,7 +114,7 @@ Runtime state for one item within a run.
 
 ```gdscript
 var item_data: ItemData
-var layer_index: int               # 0 = veiled; 1+ = depth of identity reached
+var layer_index: int               # 0 = base/veiled; 1+ = depth of identity reached
 var condition: float               # 0.0–1.0; rolled at create()
 var potential_inspect_level: int   # 0–2; incremented by Inspect Potential action
 var condition_inspect_level: int   # 0–2; incremented by Inspect Condition action
@@ -154,14 +155,17 @@ var level_label: String              # "???" if veiled, else "Level N"
 var potential_inspect_label: String
 var condition_inspect_label: String
 var condition_mult_label: String
-var current_price_min: int
-var current_price_max: int
-var current_price_label: String
+var estimated_value_min: int         # base_value × known_condition_mult × knowledge_min[layer_index]
+var estimated_value_max: int         # base_value × known_condition_mult × knowledge_max[layer_index]
+var estimated_value_label: String    # "$N" or "$N - $M"
 var potential_price_min: int
 var potential_price_max: int
 var potential_price_label: String
-var sell_price: int                  # active_layer().base_value * condition_mult * mastery bonus
-var sell_price_label: String
+var should_show_potential_price: bool # not veiled and potential_inspect_level >= 2
+var appraised_value: int             # base_value × real_condition_mult × (1 + 0.01 × super_cat_rank)
+var appraised_value_label: String
+var market_price: int                # appraised_value × MarketManager.get_category_factor()
+var market_factor_delta: float       # MarketManager.get_category_factor() - 1.0
 var condition_label: String          # raw true condition percentage, e.g. "82%"
 var condition_color: Color           # tint based on true condition; use in reveal/run_review contexts
 var condition_inspect_color: Color   # tint based on what player currently knows
@@ -204,6 +208,7 @@ func condition_mult_label_for(ctx: ItemViewContext) -> String
 func potential_label_for(ctx: ItemViewContext) -> String
 func should_show_potential_price_for(ctx: ItemViewContext) -> bool
 func price_label_for(ctx: ItemViewContext) -> String
+func price_value_for(ctx: ItemViewContext) -> int
 ```
 
 UI components call only these — never branch on stage directly.
@@ -258,8 +263,8 @@ Serialised in `SaveManager.active_actions` as plain Dictionaries:
 Value object returned by `SaveManager.advance_days()`. Read by `DaySummaryScene`.
 
 Fields: `start_day`, `end_day`, `days_elapsed`, `onsite_proceeds`, `paid_price`,
-`entry_fee`, `fuel_cost`, `living_cost`, `completed_actions`, `net_change`,
-`has_run_data()`.
+`entry_fee`, `fuel_cost`, `cargo_count`, `living_cost`, `completed_actions`,
+`net_change`, `has_run_data()`.
 
 ---
 
@@ -277,8 +282,9 @@ Continue button returns to hub via `GameManager.go_to_hub()`.
 - [x] `LotEntry` — lot-level rolled state; `get_rolled_price()` / `get_opening_bid()` derived from `npc_estimate`
 - [x] `demand_factor` replaced with `price_variance` — pure per-run noise, no demand semantics
 - [x] `price_floor_factor` / `price_ceiling_factor` added to `LotData`; `get_rolled_price()` extracted from auction scene
-- [x] `ItemEntry` — full layer / inspect / condition / knowledge API; all display logic centralised
+- [x] `ItemEntry` — full layer / inspect / condition / knowledge API; all display logic centralised; field renames: `sell_price` → `appraised_value`, `current_price_*` → `estimated_value_*`; added `market_price`, `market_factor_delta`
 - [x] `ItemEntry.unveil()` — shared unveil path for reveal scene, X-Ray action, and future callers
+- [x] `RunRecord.trailer_items` field added for extra-slot items
 - [x] `ActiveActionEntry` with `to_dict()` / `from_dict()`; stored as plain Dicts in SaveManager
 - [x] `DaySummaryScene` — standalone scene replacing old `DaySummaryPanel` + `DayPassPopup`
 

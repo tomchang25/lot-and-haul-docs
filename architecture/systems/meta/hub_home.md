@@ -19,7 +19,7 @@ Be the calm between runs: the place where the player converts won cargo into cas
 - `SaveManager.current_day` / `cash` / `active_actions` — via `SaveManager.advance_days()` on Day Pass
 - `SaveManager.storage_items` — mutated by Storage actions (queue research, queue unlock, sell)
 
-On Day Pass: `GameManager.go_to_day_summary(summary)`. On Knowledge: `GameManager.go_to_knowledge_hub()`. On Next Run: `GameManager.go_to_location_select()`. On Pawn Shop: `GameManager.go_to_pawn_shop()`. On Storage: `GameManager.go_to_storage()`.
+On Day Pass: `GameManager.go_to_day_summary(summary)`. On Knowledge: `GameManager.go_to_knowledge_hub()`. On Next Run: `GameManager.go_to_location_select()`. On Merchant: `GameManager.go_to_merchant_hub()`. On Storage: `GameManager.go_to_storage()`.
 
 ## Feature Intro
 
@@ -45,7 +45,7 @@ Buttons:
 
 - **Next Run** → `GameManager.go_to_location_select()`
 - **Storage** → `GameManager.go_to_storage()`
-- **Pawn Shop** → `GameManager.go_to_pawn_shop()`
+- **Merchant** → `GameManager.go_to_merchant_hub()`
 - **Vehicle** → `GameManager.go_to_vehicle_hub()` (see `vehicle.md`)
 - **Knowledge** → `GameManager.go_to_knowledge_hub()` (see `knowledge.md`)
 - **Day Pass** → `ConfirmationDialog` (`DayPassConfirm`) → on confirm, `_do_day_pass()` → `DaySummaryScene`
@@ -73,50 +73,71 @@ Returning from `DaySummaryScene` via `GameManager.go_to_hub()` re-runs hub `_rea
 - Unlock button disabled with reason tooltip via `AdvanceCheckLabel.describe()` when `KnowledgeManager.can_advance()` returns non-OK.
 - Market Research button queues an `ActiveActionEntry`.
 
-### Pawn Shop
+### Merchant Hub
 
-`game/meta/pawn_shop/pawn_shop_scene.gd` + `.tscn` — general-rate selling surface reachable from the hub. Accepts all categories (pawn-shop behaviour), backed by a `MerchantData` resource with an empty `accepted_super_categories`. Uses `ItemRow` directly with `PAWN_COLUMNS` (NAME, CONDITION, PRICE, POTENTIAL) and `SelectionState` for row styling. Context: `ItemViewContext.for_run_review()`.
+`game/meta/merchant/merchant_hub.gd` + `.tscn` — navigation menu for choosing which merchant to sell to. Lists all merchants from `MerchantRegistry.get_all_merchants()` as buttons. Perk-gated merchants are disabled with tooltip `"Requires perk: <id>"`. Merchants who have exhausted their daily negotiation budget are disabled with tooltip `"Closed — come back tomorrow"` (checked via `MerchantRegistry.can_negotiate()`). Back returns to Hub.
 
-Clicking a row toggles selection; selected rows expand an **ask-price slider** below the row. The slider maps a normalised `[0, 1]` input to a factor in `[ASK_PRICE_MIN_FACTOR, ASK_PRICE_MAX_FACTOR]` (`0.50`–`1.50`) applied to `entry.sell_price`. Default slider position is `0.5` (100% of sell price). Sell button is disabled until at least one item is selected. Confirm dialog shows a per-item summary with ask prices and total.
+### Merchant Shop
+
+`game/meta/merchant/merchant_shop/merchant_shop_scene.gd` + `.tscn` — basket-level selling UI. Receives the selected `MerchantData` via `GameManager.consume_pending_merchant()`. Uses `ItemListPanel` with `SHOP_COLUMNS` (NAME, CONDITION, PRICE, MARKET_FACTOR, POTENTIAL) and `ItemViewContext.for_merchant_shop(merchant)` (FORCE_TRUE_VALUE, FORCE_FULL, MERCHANT_OFFER). Only displays storage items where `merchant.offer_for(entry) > 0`.
+
+Row selection toggles via `set_selection_state()`. Sell button opens `NegotiationDialog` with selected basket. On `accepted(final_price)`: credit cash, remove items from storage, award category points (SELL action), increment negotiation count, save, return to merchant hub. On `cancelled()`: increment negotiation count, save, return to merchant hub.
+
+### Negotiation Dialog
+
+`game/meta/merchant/negotiation_dialog/negotiation_dialog.gd` + `.tscn` — basket-level negotiation overlay.
 
 ```gdscript
-const ASK_PRICE_MIN_FACTOR := 0.50
-const ASK_PRICE_MAX_FACTOR := 1.50
+signal accepted(final_price: int)
+signal cancelled
+
+enum Phase { NEGOTIATING, FINAL_OFFER }
 ```
 
-### Merchant Data (baseline)
+`begin(merchant, basket)` computes:
 
-`data/definitions/merchant_data.gd` — shipped resource describing merchants. Fields:
-
-```gdscript
-@export var merchant_id: String = ""
-@export var display_name: String = ""
-
-# Super-categories sold at the specialist rate (1.2–1.5×).
-# Empty = pawn shop behaviour (accepts all at general rate).
-@export var accepted_super_categories: Array[SuperCategoryData] = []
-
-# Designer pool that special_orders is drawn from each Day Pass.
-@export var special_order_pool: Array[ItemData] = []
-@export var special_order_count: int = 2
-
-# Perk gate. Empty = no gate.
-@export var required_perk_id: String = ""
-
-# Runtime-only: items currently on special order. Not serialised;
-# regenerated each Day Pass by drawing special_order_count from the pool.
-var special_orders: Array[ItemData] = []
+```
+base_offer  = Σ merchant.offer_for(entry) for each basket item
+ceiling     = int(base_offer × randf_range(ceiling_multiplier_min, ceiling_multiplier_max))
 ```
 
-`.tres` files live under `data/merchants/`. The pawn shop is one such merchant with empty `accepted_super_categories` and empty `special_order_pool`.
+Two states: **negotiating** (player submits proposals via ±10%/±25%/±50% buttons + input field) and **final offer** (accept or walk away only).
 
-### Specialist Merchant _(deferred)_
+Resolution per round:
 
-_Hub surfacing and sell-rate logic not yet implemented._ Data schema already exists on `MerchantData` (see above). Still to do: hub button gating on `required_perk_id`, sell-rate multipliers (in-specialty 1.2–1.5× `sell_price`, out-of-specialty 0.8×, specials at 2×), and the `special_orders` refresh hook inside `SaveManager.advance_days()`.
+| Condition                   | Outcome                                                                                            |
+| --------------------------- | -------------------------------------------------------------------------------------------------- |
+| `proposal <= current_offer` | Lowball confirm dialog; on confirm: emit `accepted(proposal)`. On cancel: no anger, round not used |
+| `proposal > ceiling`        | Anger pinned to max → final offer state at current offer                                           |
+| otherwise                   | Anger update + counter-offer; if anger cap tripped → final offer                                   |
 
-### Merchant Personality _(deferred)_
+Anger formula (when `current_offer < proposal <= ceiling`):
 
-Adds `personality_type: MerchantPersonality` enum and an `aggressive_factor` range to `MerchantData`. Affects counter-offer frequency, lock trigger threshold, and `special_orders` refresh rate.
+```
+anger += anger_k × (proposal − current_offer) / max(1, ceiling − current_offer)
+anger += anger_per_round
+```
+
+Counter-offer formula:
+
+```
+current_offer += int(counter_aggressiveness × (proposal − current_offer))
+```
+
+Ceiling range indicator shows `merchant.ceiling_multiplier_min/max` applied to base offer (never reveals the exact rolled ceiling).
+
+### Merchant Data
+
+`data/definitions/merchant_data.gd` — see `../shared/designer_resources.md` for the full field list. Key fields:
+
+- `accepted_super_categories` — specialist categories (empty = pawn shop, accepts all via `accepts_off_category`)
+- `price_multiplier` / `off_category_multiplier` — applied to `market_price` via `offer_for(entry)`
+- `ceiling_multiplier_min/max`, `anger_max`, `anger_k`, `anger_per_round`, `counter_aggressiveness` — negotiation tuning
+- `negotiation_per_day` — sessions per day (tracked via runtime `negotiations_used_today`)
+- `special_order_pool` / `special_order_count` / `special_order_bonus` — special orders refreshed each day
+- `required_perk_id` — access gate
+
+`.tres` files under `data/tres/merchants/`. The pawn shop is one such merchant with `accepts_off_category = true` and broad category acceptance. `MerchantRegistry` autoload loads all merchants and manages special order rolls and negotiation resets on day advance.
 
 ### Garage Sell _(deferred)_
 
@@ -166,19 +187,26 @@ Scam flow writes to reputation; severity thresholds determine outcome branches. 
 
 ## Done
 
-- [x] Hub scene with Next Run / Storage / Pawn Shop / Vehicle / Knowledge / Day Pass buttons
+- [x] Hub scene with Next Run / Storage / Merchant / Vehicle / Knowledge / Day Pass buttons
 - [x] Hub header displaying Mastery Rank, Balance, and Storage item count
 - [x] Day Pass confirmation dialog → `_do_day_pass()` → `SaveManager.advance_days(1)` → `DaySummaryScene`
 - [x] Vehicle button on Hub → `GameManager.go_to_vehicle_hub()` (replaced Van info popup)
 - [x] Hub `_refresh_display()` on return from `DaySummaryScene`
 - [x] Knowledge Hub entry scene at `game/meta/knowledge/knowledge_hub.{gd,tscn}` routing to Mastery / Skills / Perks sub-panels
 - [x] `DaySummaryScene` shared by hub day-pass and run-review flows; reads from `GameManager.consume_pending_day_summary()`, falls back to hub if empty
-- [x] `DaySummary` value object with `start_day` / `end_day` / `days_elapsed`, run fields, `living_cost`, `completed_actions`, computed `net_change`, and `has_run_data()` gate
+- [x] `DaySummary` value object with `start_day` / `end_day` / `days_elapsed`, run fields, `cargo_count`, `living_cost`, `completed_actions`, computed `net_change`, and `has_run_data()` gate
 - [x] Storage scene with Market Research queue, Layer Unlock queue, sell
 - [x] Storage Unlock button disabled-reason tooltip via `AdvanceCheckLabel.describe()`
-- [x] Pawn Shop scene reachable from hub (`GameManager.go_to_pawn_shop()`)
-- [x] Pawn Shop ask-price slider (`ASK_PRICE_MIN_FACTOR`–`ASK_PRICE_MAX_FACTOR`); row selection + confirm dialog with per-item summary
-- [x] `MerchantData` resource with `accepted_super_categories`, `special_order_pool`, `special_order_count`, `required_perk_id`, and runtime `special_orders`
+- [x] `MerchantData` resource with full negotiation tuning, pricing logic, special orders, and perk gates
+- [x] `MerchantRegistry` autoload — loads merchants, manages special order rolls and negotiation resets on day advance
+- [x] Merchant Hub scene — lists all merchants, perk-gated and negotiation-budget-gated buttons
+- [x] Merchant Shop scene — basket selection via `ItemListPanel`, opens `NegotiationDialog` on sell
+- [x] Negotiation Dialog — basket-level negotiation with anger/counter mechanics, ceiling mystery, lowball confirm
+- [x] Merchant perk gate enforced in both `merchant_hub` and `MerchantRegistry.get_available_merchants()`
+- [x] Daily negotiation limit — `negotiations_used_today` persisted via `SaveManager`; merchant closes when exhausted
+- [x] Sale settlement — credit cash, remove from storage, award category points (SELL), increment negotiation count
+- [x] Special-order data model — `special_order_pool` / `special_orders` / `completed_order_ids` on `MerchantData`; `MerchantRegistry.roll_special_orders()` called from `SaveManager.advance_days()`
+- [x] `GameManager.go_to_merchant_hub()` / `go_to_merchant_shop(merchant)` / `consume_pending_merchant()` hand-off pattern
 
 ## Soon
 
@@ -194,8 +222,6 @@ _None._
 
 ## Later
 
-- [ ] Specialist Merchant — hub gating on `required_perk_id`, sell-rate multipliers, `special_orders` refresh on `advance_days()`
-- [ ] Merchant Personality — `personality_type` enum and `aggressive_factor`
 - [ ] Garage Sell scene modelled on `game/run/auction/`
 - [ ] Own Shop — player listings resolved inside `advance_days()`
 - [ ] Bank / Bankruptcy — daily interest inside `advance_days()`, bankruptcy game-over, optional loan UI
