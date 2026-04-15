@@ -34,9 +34,7 @@ Naming convention: `_value` = appraisal-side, `_price` / `_offer` = transaction-
 - **Step 2 — Market system** — `SuperCategoryData` market tuning fields (`market_mean_min/max`, `market_stddev`, `market_drift_per_day`); `MarketManager` autoload with `advance_market(days)`, `get_category_factor()`, `get_super_category_trend()`; `SaveManager` persists `super_cat_means` and `category_factors_today`; `market_price` computed property on `ItemEntry`.
 - **Step 3 — Negotiation dialog + shop UI** — `MerchantData` negotiation fields (`ceiling_multiplier_min/max`, `anger_max`, `anger_k`, `anger_per_round`, `counter_aggressiveness`, `negotiation_per_day`); `NegotiationDialog` with anger/counter mechanics, ceiling mystery, lowball confirm; shop scene uses `ItemListPanel` with `MERCHANT_OFFER` price mode; daily negotiation limit persisted via `negotiations_used_today`; `MerchantRegistry.advance_day()` orchestrates special order rolls + negotiation resets.
 
-### Immediate next — Merchant v2 completion
-
-Two remaining steps:
+---
 
 #### Step 4 — Merchant content
 
@@ -94,6 +92,17 @@ later reputation and faction systems.
 - **Reputation foundation** — Completed orders are recorded per merchant as the
   hook for the later reputation and faction systems.
 
+**Fulfillment panel eligibility preview**
+
+The fulfillment panel gives the player no way to tell, before opening an order,
+whether their storage can fulfill it. Deciding whether an order is worth
+pursuing currently requires scanning inventory manually, then clicking in and
+discovering mid-assignment that key slots can't be filled.
+
+Each order in the merchant's list carries an at-a-glance indicator of whether
+current storage can fulfill it — fully, partially, or not at all — so the
+decision to open an order is informed before the click.
+
 ### Immediate next — Other systems
 
 - **Director system skeleton** — get all three runs flowing end-to-end with placeholder content first.
@@ -116,6 +125,30 @@ stabilise until earlier systems impose real constraints on a run.
 
 ---
 
+**Order slot eligibility preview**
+
+Inside an opened order, each slot still requires a click to learn whether
+storage contains anything matching its category and gates. Slots with strict
+gates often reveal an empty list after the click, and orders with several
+slots turn into a click-through audit just to plan which ones are worth
+pursuing. The order-level indicator answered whether to open an order; the
+same question reappears one level down, per slot.
+
+Each slot in the opened order carries the same at-a-glance fillability
+indicator as the order list — fully, partially, or not at all — so the
+player can pick which slots to work on by scanning rather than probing.
+
+- **Per-slot indicator counts independently** — Each slot evaluates its own
+  fillability against the full storage, ignoring items other slots might
+  claim. Three slots can all show fully-fillable when only one matching
+  item exists, because the per-slot question is "could this slot be
+  filled?", not "could every slot be filled at once?".
+
+- **Order-level indicator keeps cross-slot accounting** — The list-level
+  rollup still reflects whether a single assignment plan can satisfy every
+  slot together, since that's the question that matters when deciding
+  whether to open the order at all.
+
 **Item knowledge & inspection overhaul**:
 
 Why: The current system exposes too much structured information too cheaply. Players can read layer depth, potential rating, and condition tier directly from the item list, reducing all storage decisions to parameter comparison rather than judgment under uncertainty. The existing inspect actions (per-item, stamina-gated) follow the same logic as the storage list — they just fill in blanks. The goal is to make information feel earned and lossy, not just locked behind a cost.
@@ -131,6 +164,80 @@ Why: The current system exposes too much structured information too cheaply. Pla
 - **Per-lot inspection replaces per-item** — The inspection phase operates on the lot as a whole, not on individual items. Each action randomly targets an unveiled item in the lot. Actions: Check Condition (raises `condition_accuracy` on a random item), Check Rarity (raises `rarity_accuracy`), Try to Peek (partially reveals a partial-veil item), X-Ray Peek (reveals a full-veil item, requires perk). Category knowledge points are awarded based on whichever item is hit.
 
 - **Research hub replaces Storage action popup + Market Research** — The home hub gains a Research sub-screen alongside Storage. Items with unlocked layers remaining can be slotted into research (4 active slots, 8 queued). Each day-advance tick applies effects to all active slots based on a player-set priority: condition repair, condition accuracy, rarity accuracy, or layer unlock attempt. Market Research as a separate action is removed; its price-range-narrowing effect becomes one output of the research priority system. The old `ActionContext.AUTO` / `HOME` split and `MARKET_RESEARCH` action type are removed.
+
+---
+
+**Per-slot item requirements**
+
+Slot gates are generated from two hardcoded constants — the rarity floor is
+always Uncommon and the condition floor is always 60% — with only a
+probability-per-gate exposed to designers. This collapses the entire
+requirement design space to binary gates at fixed thresholds, so a premium
+order reads to the player as "Normal × 1, Uncommon+ × 1" rather than the
+intended "Epic+ at 80% condition × 1, Uncommon+ at 50% condition × 3". Orders
+need to express graded quality requirements, not on/off gates.
+
+- **Per-slot requirement data** — Each slot carries its own rarity floor,
+  condition floor, and required count as designer-authored values on the order
+  template. A single order can combine multiple distinct quality tiers across
+  its slots, so premium orders read as legibly premium rather than two
+  near-identical gates.
+
+- **Configurable payout basis** — Each order template selects whether per-item
+  payout derives from base value or current market price, independent of the
+  existing condition-multiplier toggle. Designers can author orders that track
+  market fluctuations and orders that pay a steady flat rate.
+
+---
+
+**Transaction views show reference price alongside offer**
+
+Item rows render a single price whose meaning is context-dependent — appraised
+value in storage, merchant offer in the shop, order payout in fulfillment. The
+player loses the reference price the moment they enter a transaction view,
+leaving them unable to compare the offer in front of them against what the item
+is broadly worth. This is most acute in the fulfillment panel, where the
+order's per-item payout displaces any market signal entirely and the player
+can't tell whether turning the item in is a good or bad trade.
+
+In transaction views — merchant shop and order fulfillment — the row carries
+two prices side-by-side: the item's reference value (market or appraised) and
+the offer being evaluated. The "what is this worth to me" anchor never
+disappears, and the comparison takes no hover or mode-swap.
+
+---
+
+**Order rarity gates respect inspection state**
+
+Under the planned accuracy-based display overhaul, a player with low accuracy
+on an item sees its rarity as a range (e.g. "Uncommon+") rather than the exact
+tier. Slot acceptance currently checks true underlying rarity — so the moment a
+Legendary-gated slot accepts an item, the player learns that item is Legendary
+regardless of how little they've inspected it. The rarity gate becomes a free
+inspection tool, which defeats the information scarcity the inspection overhaul
+is built on.
+
+Whether a rarity-gated slot accepts an item is determined against the player's
+current information about the item, not the true value. An item the player does
+not yet know is Legendary does not slot into a Legendary-only order just
+because it truly is one.
+
+---
+
+**Negotiation auto-accept on small gaps**
+
+The merchant counters on every submission regardless of how close the proposal
+is to its current offer. When the player lands a few dollars above the standing
+offer, the forced extra round produces no meaningful price movement while
+burning a submission and trickling more anger — it punishes near-agreement.
+
+When the player's proposal sits within a small margin of the merchant's current
+offer, the merchant accepts at the proposed price instead of countering.
+Outside that margin the existing anger-and-counter flow still runs.
+
+Open question: the "small" threshold needs a definition — percentage of
+gap-to-ceiling, flat dollar amount, or fraction of base offer. Each produces a
+different feel at scale.
 
 ---
 
