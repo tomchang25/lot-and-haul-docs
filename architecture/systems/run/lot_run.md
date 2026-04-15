@@ -46,7 +46,7 @@ hub
 
 `RunRecord` — class at `game/shared/run_record/run_record.gd`; runtime instance lives on `RunManager.run_record`, not a `.tres`. Owns `location_data`, `car_data`, `browse_lots`, `browse_index`, `lot_entry`, `lot_items`, `won_items`, `last_lot_won_items`, `cargo_items`, `onsite_proceeds`, `paid_price`, `net`, `entry_fee`, `fuel_cost`, `stamina`, `max_stamina`, `actions_remaining`. `create(location_data, car_data)` calls `compute_travel_costs()` to lock `entry_fee` and `fuel_cost` for the entire run.
 
-`ItemEntry` runtime fields touched by this system: `potential_inspect_level`, `condition_inspect_level`, `layer_index`, `paid_price`. See the item system doc for the full class.
+`ItemEntry` runtime fields touched by this system: `potential_inspect_level`, `condition_inspect_level`, `layer_index`. See the item system doc for the full class.
 
 ### Location Select
 
@@ -104,7 +104,7 @@ const XRAY_COST      := 3  # SP
 
 `ItemCard` at `game/shared/item_display/item_card.gd` uses `ItemViewContext.for_inspection()` (all modes `RESPECT_INSPECT_LEVEL`). Plays a colour-flash tween on the field named by `refresh(changed)` — `"potential"`, `"condition"`, or `"unveil"`.
 
-Price estimate (`entry.current_price_label`) derives from `active_layer().base_value × get_known_condition_multiplier() × knowledge_min/max[layer_index]`:
+Price estimate (`entry.estimated_value_label`) derives from `active_layer().base_value × get_known_condition_multiplier() × knowledge_min/max[layer_index]`:
 
 | `potential_inspect_level` | `condition_inspect_level` | Shown                                 |
 | ------------------------- | ------------------------- | ------------------------------------- |
@@ -167,7 +167,7 @@ Termination: once `current_display_price >= rolled_price`, the NPC timer stops a
 
 Player actions during the tick loop: **Bid** adds `MIN_STEP` to `_current_display_price`, sets `_last_bidder = "player"`, disables both buttons until the next NPC tick, and sets `_shorten_next_npc_tick` so the next NPC interval is halved once. **Pass** terminates immediately as described above.
 
-Lot summary display is built from `lot_items` using `entry.display_name` and `entry.current_price_label`. Total: `$sum_min – $sum_max` across non-veiled items; appends `"+"` if any are veiled.
+Lot summary display is built from `lot_items` using `entry.display_name` and `entry.estimated_value_label`. Total: `$sum_min – $sum_max` across non-veiled items; appends `"+"` if any are veiled.
 
 Debug overlay (debug builds only):
 
@@ -201,6 +201,8 @@ Layer 0 → 1 advance here is unconditional and bypasses `KnowledgeManager.can_a
 
 `game/run/run_review/run_review_scene.gd` + `.tscn` — settlement screen. Commits the run result to `SaveManager` and advances days through the shared `SaveManager.advance_days()` chokepoint.
 
+On entry, `_apply_trailer_damage()` rolls damage on each `trailer_items` entry using `car_data.trailer_damage_chance` and `trailer_damage_ratio_min/max`. Damaged items have their `condition` reduced. A warning label shows how many trailer items were cracked. The cargo list displays both `cargo_items` and `trailer_items` combined.
+
 Continue flow (`_on_continue_pressed`) — strict order, because future bank interest in `advance_days` must see the post-sale balance:
 
 1. **Sale-side cash mutation**:
@@ -213,7 +215,7 @@ Continue flow (`_on_continue_pressed`) — strict order, because future bank int
 5. **Clear run state**: `RunManager.clear_run_state()`.
 6. **Navigate**: `GameManager.go_to_day_summary(summary)`.
 
-Display: one `ItemRow` per cargo item using `ItemViewContext.for_run_review()` (`FORCE_TRUE_VALUE`, `SELL_PRICE`). Cargo list wrapped in a `ScrollContainer` so long manifests scroll; column header stays pinned above.
+Display: one `ItemRow` per cargo item using `ItemViewContext.for_run_review()` (`FORCE_TRUE_VALUE`, `APPRAISED_VALUE`). Cargo list wrapped in a `ScrollContainer` so long manifests scroll; column header stays pinned above. Finance section shows estimated cargo value (`appraised_value` sum) and estimated profit.
 
 ## Notes
 
@@ -246,7 +248,8 @@ The debug overlay is gated to debug builds on purpose — exposing the true pric
 - [x] Reveal: layer-0 → 1 unconditional advance via `entry.unveil()`; inspect levels forced to 2; routes to lot browse
 - [x] Cargo: 2-D grid (v2) — see `cargo.md`
 - [x] Run review: sale-side cash mutation → `advance_days(travel_days)` → `DaySummaryScene`
-- [x] Run review: cargo list in `ScrollContainer` with pinned column header
+- [x] Run review: cargo list in `ScrollContainer` with pinned column header; estimated cargo value and profit display
+- [x] Run review: trailer damage applied on entry via `_apply_trailer_damage()`; warning label shown
 - [x] `ItemViewContext` — per-stage display rules; no stage branching in UI components
 
 ## Soon

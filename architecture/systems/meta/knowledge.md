@@ -96,6 +96,8 @@ func unlock_perk(perk_id: String) -> void
 func has_perk(perk_id: String) -> bool
 func get_perk(perk_id: String) -> PerkData
 func get_all_perks() -> Array[PerkData]
+func perk_count() -> int
+func skill_count() -> int
 
 # Layer unlock
 func can_advance(entry: ItemEntry, context: LayerUnlockAction.ActionContext) -> AdvanceCheck

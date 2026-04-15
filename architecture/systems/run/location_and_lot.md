@@ -37,7 +37,7 @@ On confirm: `GameManager.go_to_location_entry()`.
 
 ### Location Select Scene
 
-`game/meta/location_select/location_select.gd` + `.tscn` — implemented. Sits between `hub` and `location_entry`. Scans `DataPaths.LOCATIONS_DIR` for `LocationData` `.tres` files and instantiates a `LocationCard` per entry. Cards currently show display name, description, entry fee, travel days, and lot count. On select, the scene constructs `RunManager.run_record = RunRecord.create(location, SaveManager.active_car)` and calls `GameManager.go_to_location_entry()`.
+`game/meta/location_select/location_select.gd` + `.tscn` — implemented. Sits between `hub` and `location_entry`. Displays `LocationCard` entries for available locations. `SaveManager.available_location_ids` is rolled each day advance via `roll_available_locations()` (shuffles all location IDs, picks `Economy.LOCATION_SAMPLE_SIZE`). Cards show display name, description, entry fee, travel days, and lot count. On select, the scene constructs `RunManager.run_record = RunRecord.create(location, SaveManager.active_car)` and calls `GameManager.go_to_location_entry()`.
 
 Still TODO on the card: computed pre-run cost `entry_fee + (fuel_cost_per_day × travel_days)` against the active car. The card does not currently read the active car at all.
 

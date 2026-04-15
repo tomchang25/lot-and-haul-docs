@@ -33,6 +33,9 @@ On confirm: `GameManager.go_to_run_review()`.
 @export var stamina_cap: int
 @export var fuel_cost_per_day: int = 0     # cash per travel day
 @export var extra_slot_count: int = 0      # independent trailer slots; 0 = no trailer
+@export var trailer_damage_chance: float = 0.0    # probability each trailer item takes damage
+@export var trailer_damage_ratio_min: float = 0.0 # minimum condition fraction lost
+@export var trailer_damage_ratio_max: float = 0.0 # maximum condition fraction lost
 @export var price: int = 0                 # cash cost at the car shop
 @export var icon: Texture2D               # Hub + selection UI
 
@@ -75,8 +78,11 @@ var _cargo_cells: Dictionary               # Vector2i → Panel
 var _temp_placement: Dictionary            # Vector2i → ItemEntry (temp cells)
 var _temp_cells: Dictionary                # Vector2i → Panel
 var _extra_slot_items: Array[ItemEntry]    # size = car_data.extra_slot_count
+var _extra_slot_cells: Dictionary          # slot_index → Panel
 var _item_rotations: Dictionary            # ItemEntry → int (per-item rotation memory)
 ```
+
+Items placed in extra slots are written to `RunManager.run_record.trailer_items` on confirm. Trailer items are subject to damage in run review (see `lot_run.md`).
 
 ### Cargo Scene
 
@@ -164,10 +170,12 @@ Trailer slots are meant to be the "escape valve" for heavy oddball wins — cons
 - [x] Item rotation (Q / E keys); per-session memory via `_item_rotations`
 - [x] On-site sell at flat rate; proceeds written to `onsite_proceeds`
 - [x] `ItemRow` and `ItemRowTooltip` show Weight and Grid columns in cargo context
+- [x] `CarData.trailer_damage_chance/ratio_min/ratio_max` — trailer items can be damaged on arrival, revealed in run review
+- [x] Extra-slot items written to `RunManager.run_record.trailer_items` on confirm
 
 ## Soon
 
-- [ ] Vehicle types reflected in game run check
+_None._
 
 ## Blocked
 
@@ -175,4 +183,4 @@ _None._
 
 ## Later
 
-- [ ] Damage chance: items can be damaged on arrival, revealed in run review
+_None._
