@@ -47,9 +47,9 @@ starting over with a new location.
 | Skill system         | Done   | Full three-pillar knowledge system implemented (see ../systems/meta/knowledge.md)    |
 | Perk system          | Done   | Registry, X-ray perk, `has_perk()` API all implemented                               |
 | X-ray inspect action | Done   | 3 SP action in inspection scene; gated by `xray_inspect` perk; uses `entry.unveil()` |
-| Pawn shop v2         | New    | Full sell flow with MerchantData; replaces on-site flat sell as the cash-out point   |
+| Merchant v2          | Done   | Full sell flow with MerchantData; replaces on-site flat sell as the cash-out point   |
 | Mastery gate         | New    | Location browse availability check against mastery rank for high-tier auctions       |
-| CarData variants     | New    | Min 2–3 additional .tres files (large van for Run 1, small van for post-reset)       |
+| CarData variants     | Done   | Min 2–3 additional .tres files (large van for Run 1, small van for post-reset)       |
 | Test item set        | New    | High base value, shallow layers, tuned for director runs                             |
 
 ---
@@ -58,7 +58,4 @@ starting over with a new location.
 
 1. **Director system skeleton** — get all three runs flowing end-to-end with placeholder content first.
 2. **Dialog system** — linear first, Uncle branching second.
-3. -**Pawn shop v2**- Merchant System v2 — Negotiation system, special merchant
-4. **Mastery gate** — location browse check; low effort, high perceived depth.
-5. **CarData variants + test items** — data work; fill in last.
-6. **CarData variants + test items** — data work; fill in last.
+3. **Mastery gate** — location browse check; low effort, high perceived depth.
