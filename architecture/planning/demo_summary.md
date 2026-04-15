@@ -44,7 +44,7 @@ starting over with a new location.
 | -------------------- | ------ | ------------------------------------------------------------------------------------ |
 | Director system      | New    | Fixed-seed runs with phase triggers; wraps existing RunRecord and location browse    |
 | Dialog system        | New    | Linear with simple branching for Uncle's two reactions; data-driven from the start   |
-| Skill system         | Done   | Full three-pillar knowledge system implemented (see ../systems/meta/knowledge.md)                    |
+| Skill system         | Done   | Full three-pillar knowledge system implemented (see ../systems/meta/knowledge.md)    |
 | Perk system          | Done   | Registry, X-ray perk, `has_perk()` API all implemented                               |
 | X-ray inspect action | Done   | 3 SP action in inspection scene; gated by `xray_inspect` perk; uses `entry.unveil()` |
 | Pawn shop v2         | New    | Full sell flow with MerchantData; replaces on-site flat sell as the cash-out point   |
@@ -58,6 +58,7 @@ starting over with a new location.
 
 1. **Director system skeleton** — get all three runs flowing end-to-end with placeholder content first.
 2. **Dialog system** — linear first, Uncle branching second.
-3. **Pawn shop v2** — needed for Run 1 loop to feel complete.
+3. -**Pawn shop v2**- Merchant System v2 — Negotiation system, special merchant
 4. **Mastery gate** — location browse check; low effort, high perceived depth.
 5. **CarData variants + test items** — data work; fill in last.
+6. **CarData variants + test items** — data work; fill in last.
