@@ -75,13 +75,13 @@ Returning from `DaySummaryScene` via `GameManager.go_to_hub()` re-runs hub `_rea
 
 ### Merchant Hub
 
-`game/meta/merchant/merchant_hub.gd` + `.tscn` — navigation menu for choosing which merchant to sell to. Lists all merchants from `MerchantRegistry.get_all_merchants()` as buttons. Perk-gated merchants are disabled with tooltip `"Requires perk: <id>"`. Merchants who have exhausted their daily negotiation budget are disabled with tooltip `"Closed — come back tomorrow"` (checked via `MerchantRegistry.can_negotiate()`). Back returns to Hub.
+`game/meta/merchant/merchant_hub.gd` + `.tscn` — navigation menu for choosing which merchant to sell to. Lists all merchants from `MerchantRegistry.get_all_merchants()` as a row per merchant. The row's Shop button is perk-gated (tooltip `"Requires perk: <id>"`) and closed-gated (tooltip `"Closed — come back tomorrow"` via `MerchantRegistry.can_negotiate()`). Merchants with `order_roll_cadence > 0` also get an "Orders (N)" button that routes to the Fulfillment Panel via `GameManager.go_to_fulfillment_panel(merchant)`; it's disabled when `active_orders` is empty or the merchant is perk-locked. Back returns to Hub.
 
 ### Merchant Shop
 
-`game/meta/merchant/merchant_shop/merchant_shop_scene.gd` + `.tscn` — basket-level selling UI. Receives the selected `MerchantData` via `GameManager.consume_pending_merchant()`. Uses `ItemListPanel` with `SHOP_COLUMNS` (NAME, CONDITION, PRICE, MARKET_FACTOR, POTENTIAL) and `ItemViewContext.for_merchant_shop(merchant)` (FORCE_TRUE_VALUE, FORCE_FULL, MERCHANT_OFFER). Only displays storage items where `merchant.offer_for(entry) > 0`.
+`game/meta/merchant/merchant_shop/merchant_shop_scene.gd` + `.tscn` — basket-level selling UI. Receives the selected `MerchantData` via `GameManager.consume_pending_merchant()`. Uses `ItemListPanel` with `SHOP_COLUMNS = [NAME, CONDITION, APPRAISED_VALUE, MERCHANT_OFFER, MARKET_FACTOR, POTENTIAL]` and `ItemViewContext.for_merchant_shop(merchant)` (FORCE_TRUE_VALUE, FORCE_FULL). `APPRAISED_VALUE` and `MERCHANT_OFFER` are two independent price columns so the player keeps the reference price visible alongside the merchant's current offer instead of one displacing the other. Only displays storage items where `merchant.offer_for(entry) > 0`.
 
-Row selection toggles via `set_selection_state()`. Sell button opens `NegotiationDialog` with selected basket. On `accepted(final_price)`: credit cash, remove items from storage, award category points (SELL action), increment negotiation count, save, return to merchant hub. On `cancelled()`: increment negotiation count, save, return to merchant hub.
+Row selection toggles via `set_selection_state()`. Sell button opens `NegotiationDialog` with selected basket. On `accepted(final_price)`: credit cash, remove items from storage, award category points (SELL action), increment negotiation count, save — then a **trade summary popup** (`TradeSummaryPopup`, an `AcceptDialog`) shows `"Sold N item(s) for $X."` before the scene transitions back to the merchant hub. On popup dismiss (confirm or cancel): `GameManager.go_to_merchant_hub()`. On negotiation `cancelled()`: increment negotiation count, save, return directly to merchant hub (no popup).
 
 ### Negotiation Dialog
 
@@ -105,11 +105,12 @@ Two states: **negotiating** (player submits proposals via ±10%/±25%/±50% butt
 
 Resolution per round:
 
-| Condition                   | Outcome                                                                                            |
-| --------------------------- | -------------------------------------------------------------------------------------------------- |
-| `proposal <= current_offer` | Lowball confirm dialog; on confirm: emit `accepted(proposal)`. On cancel: no anger, round not used |
-| `proposal > ceiling`        | Anger pinned to max → final offer state at current offer                                           |
-| otherwise                   | Anger update + counter-offer; if anger cap tripped → final offer                                   |
+| Condition                             | Outcome                                                                                            |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `proposal <= current_offer`           | Lowball confirm dialog; on confirm: emit `accepted(proposal)`. On cancel: no anger, round not used |
+| `proposal > ceiling`                  | Anger pinned to max → final offer state at current offer                                           |
+| `proposal` within auto-accept band    | Probabilistic auto-accept at the proposed price; skips counter round                               |
+| otherwise                             | Anger update + counter-offer; if anger cap tripped → final offer                                   |
 
 Anger formula (when `current_offer < proposal <= ceiling`):
 
@@ -124,7 +125,15 @@ Counter-offer formula:
 current_offer += int(counter_aggressiveness × (proposal − current_offer))
 ```
 
+**Auto-accept on small gaps**: when the player's proposal sits close to the merchant's current offer, the merchant may accept at the proposed price instead of countering. The gap ratio is `(proposal − current_offer) / max(1, ceiling − current_offer)`. If that ratio is below `merchant.auto_accept_threshold`, acceptance probability is linearly interpolated from `1.0` (ratio = 0) down to `merchant.auto_accept_p_min` (ratio = threshold) and a random roll decides whether to emit `accepted(proposal)` immediately. Outside the threshold the anger-and-counter flow runs unchanged. This stops the merchant from forcing an extra round for trivial price movement and defangs the penalty on near-agreement.
+
 Ceiling range indicator shows `merchant.ceiling_multiplier_min/max` applied to base offer (never reveals the exact rolled ceiling).
+
+### Fulfillment Panel
+
+`game/meta/merchant/fulfillment_panel/fulfillment_panel.gd` + `.tscn` — dedicated panel for turning in items against a merchant's active special orders, kept distinct from the normal sale flow. Receives the selected `MerchantData` via `GameManager.consume_pending_merchant()`. Order list on the left shows per-order eligibility; selecting an order reveals per-slot eligibility and opens an inventory list on the right with a live session payout preview. Uses `ItemListPanel` with `[NAME, CONDITION, APPRAISED_VALUE, SPECIAL_ORDER]` columns and `ItemViewContext.for_fulfillment(order)`.
+
+Full spec in `special_orders.md`.
 
 ### Merchant Data
 
@@ -133,11 +142,12 @@ Ceiling range indicator shows `merchant.ceiling_multiplier_min/max` applied to b
 - `accepted_super_categories` — specialist categories (empty = pawn shop, accepts all via `accepts_off_category`)
 - `price_multiplier` / `off_category_multiplier` — applied to `market_price` via `offer_for(entry)`
 - `ceiling_multiplier_min/max`, `anger_max`, `anger_k`, `anger_per_round`, `counter_aggressiveness` — negotiation tuning
+- `auto_accept_threshold` / `auto_accept_p_min` — auto-accept band for close-gap proposals
 - `negotiation_per_day` — sessions per day (tracked via runtime `negotiations_used_today`)
-- `special_order_pool` / `special_order_count` / `special_order_bonus` — special orders refreshed each day
+- `special_orders: Array[SpecialOrderData]` / `order_roll_cadence` / `max_active_orders` — special order pool, roll cadence, and simultaneous-order cap (see `special_orders.md`)
 - `required_perk_id` — access gate
 
-`.tres` files under `data/tres/merchants/`. The pawn shop is one such merchant with `accepts_off_category = true` and broad category acceptance. `MerchantRegistry` autoload loads all merchants and manages special order rolls and negotiation resets on day advance.
+`.tres` files under `data/tres/merchants/`. The pawn shop is one such merchant with `accepts_off_category = true` and broad category acceptance. `MerchantRegistry` autoload loads all merchants and drives daily orchestration via `advance_day()` (order expiry, cadence-driven rolls, negotiation budget resets).
 
 ### Garage Sell _(deferred)_
 
@@ -207,6 +217,11 @@ Scam flow writes to reputation; severity thresholds determine outcome branches. 
 - [x] Sale settlement — credit cash, remove from storage, award category points (SELL), increment negotiation count
 - [x] Special-order data model — `special_order_pool` / `special_orders` / `completed_order_ids` on `MerchantData`; `MerchantRegistry.roll_special_orders()` called from `SaveManager.advance_days()`
 - [x] `GameManager.go_to_merchant_hub()` / `go_to_merchant_shop(merchant)` / `consume_pending_merchant()` hand-off pattern
+- [x] Negotiation auto-accept on small gaps — `auto_accept_threshold` / `auto_accept_p_min` on `MerchantData`; probabilistic acceptance when the proposal is close to the current offer instead of forcing a counter round
+- [x] Trade result summary popup — `TradeSummaryPopup` shows "Sold N item(s) for $X." on accept paths before transitioning back to merchant hub
+- [x] Merchant Shop side-by-side price columns — `APPRAISED_VALUE` + `MERCHANT_OFFER` composed via independent columns so the reference price stays visible during negotiation
+- [x] Merchant hub "Orders (N)" button for merchants with active special orders → fulfillment panel
+- [x] Special Order System V2 — dedicated fulfillment panel, per-order / per-slot eligibility indicators, partial-delivery vs all-or-nothing turn-in, graded rarity/condition floors, per-factor pricing flags (`uses_condition` / `uses_knowledge` / `uses_market`), cycle-based rolls with deadlines, `completed_order_ids` reputation hook (see `special_orders.md`)
 
 ## Soon
 

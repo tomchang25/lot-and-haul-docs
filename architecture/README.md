@@ -15,7 +15,7 @@ reference, drafts, or historical records.
 | Designer-authored Resources (ItemData, LotData, CarData…)| `systems/shared/designer_resources.md`       |
 | ItemRow / ItemCard / ItemListPanel / ItemViewContext      | `systems/shared/item_display.md`             |
 | Run-side blocks (cargo, location selection, lot run flow)| `systems/run/`                               |
-| Meta-side blocks (hub, knowledge, vehicle)               | `systems/meta/`                              |
+| Meta-side blocks (hub, knowledge, vehicle, special orders)| `systems/meta/`                              |
 | Aspirational / eventual-convergence designs              | `drafts/north_star/`                         |
 | Scoped-but-unscheduled features                          | `drafts/features/`                           |
 | Superseded historical docs                               | `history/`                                   |

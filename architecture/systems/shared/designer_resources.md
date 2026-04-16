@@ -168,18 +168,57 @@ func stats_line() -> String  # "Grid: CxR    Weight: W    Stamina: S    Fuel/day
 @export var anger_k: float = 20.0            # gain coefficient for proposal-greed anger
 @export var anger_per_round: float = 20.0    # flat anger per submission
 @export var counter_aggressiveness: float = 0.3  # fraction of gap closed per counter
+@export var auto_accept_threshold: float = 0.2   # gap-to-ceiling ratio below which auto-accept may trigger
+@export var auto_accept_p_min: float = 0.05      # probability floor at the threshold boundary
 @export var negotiation_per_day: int = 1
-@export var special_order_pool: Array[ItemData] = []
-@export var special_order_count: int = 2
-@export var special_order_bonus: float = 0.25
+@export var special_orders: Array[SpecialOrderData] = []   # templates this merchant rolls from
+@export var order_roll_cadence: int = 0      # days between roll attempts; 0 = no orders
+@export var max_active_orders: int = 1       # simultaneous-order cap
 @export var required_perk_id: String = ""
 
 func offer_for(entry: ItemEntry) -> int
 # Returns market_price × price_multiplier for in-spec items,
 # market_price × off_category_multiplier for off-category (if accepted), else 0.
+
+# Runtime state (not exported, persisted via SaveManager):
+var active_orders: Array[SpecialOrder] = []
+var completed_order_ids: Array[String] = []  # accumulates; never cleared
+var last_order_roll_day: int = -1
+var negotiations_used_today: int = 0
 ```
 
-`.tres` files under `data/tres/merchants/`. `MerchantRegistry` autoload loads all `.tres` and exposes `get_merchant(id)` / `get_all_merchants()` / `get_available_merchants()`. See `../meta/hub_home.md` for full merchant system spec.
+`.tres` files under `data/tres/merchants/`. `MerchantRegistry` autoload loads all `.tres` and exposes `get_merchant(id)` / `get_all_merchants()` / `get_available_merchants()`. See `../meta/hub_home.md` for the full merchant flow and `../meta/special_orders.md` for the order sub-system.
+
+### `SpecialOrderData` (`data/definitions/special_order_data.gd`)
+
+```gdscript
+@export var special_order_id: String                 # snake_case; matches .tres filename stem
+@export var slot_count_min: int = 1
+@export var slot_count_max: int = 1
+@export var slot_pool: Array[SpecialOrderSlotPoolEntry] = []
+@export var buff_min: float = 1.0
+@export var buff_max: float = 1.0
+@export var uses_condition: bool = false             # feeds PriceConfig.condition
+@export var uses_knowledge: bool = false             # feeds PriceConfig.knowledge
+@export var uses_market: bool = false                # feeds PriceConfig.market
+@export var allow_partial_delivery: bool = false     # bulk = true, premium = false
+@export var completion_bonus: int = 0
+@export var deadline_days: int = 5
+```
+
+`.tres` files under `data/tres/special_orders/`. Naming convention: `{merchant_id}_{archetype}.tres`. Attached to merchants via `MerchantData.special_orders`. See `../meta/special_orders.md` for archetype guidance and runtime flow.
+
+### `SpecialOrderSlotPoolEntry` (`data/definitions/special_order_slot_pool_entry.gd`)
+
+```gdscript
+@export var categories: Array[CategoryData] = []     # slot picks one category uniformly
+@export var rarity_floor: int = -1                   # -1 = no gate; otherwise ItemData.Rarity value
+@export var condition_floor: float = 0.0             # 0.0 = no gate
+@export var count_min: int = 1
+@export var count_max: int = 1
+```
+
+Inline sub-resource under `SpecialOrderData.slot_pool`. Each generated slot picks one pool entry uniformly.
 
 ---
 
@@ -196,6 +235,9 @@ func offer_for(entry: ItemEntry) -> int
 - [x] `SuperCategoryData` market tuning fields: `market_mean_min`, `market_mean_max`, `market_stddev`, `market_drift_per_day`
 - [x] `LocationData` resource with `location_id`, `display_name`, `description`, `entry_fee`, `travel_days`, `lot_number`, `lot_pool`
 - [x] `MerchantData` resource with full negotiation tuning, special orders, pricing logic, and perk gates
+- [x] `MerchantData` auto-accept tuning — `auto_accept_threshold` / `auto_accept_p_min` for close-gap acceptance without forcing a counter round
+- [x] `MerchantData` v2 order fields — `special_orders: Array[SpecialOrderData]`, `order_roll_cadence`, `max_active_orders` (replaces v1 `special_order_pool` / `special_order_count` / `special_order_bonus`)
+- [x] `SpecialOrderData` / `SpecialOrderSlotPoolEntry` resources — graded rarity/condition floors, per-factor pricing flags, partial-delivery toggle, completion bonus, deadline
 
 ## Soon
 

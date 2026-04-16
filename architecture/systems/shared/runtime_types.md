@@ -224,12 +224,109 @@ func get_known_condition_multiplier() -> float
 # level 0 → 1.0 (neutral); level 1 → 0.5 or 1.0; level 2 → precise band midpoint
 ```
 
+### Unified price pipeline
+
+```gdscript
+func compute_price(config: PriceConfig) -> int
+# Reads active_layer().base_value, then conditionally folds in condition,
+# knowledge, and market factors per PriceConfig flags, and finally scales by
+# config.multiplier. Used by appraised_value, market_price, and SpecialOrder
+# payouts — no duplicated math across callers.
+```
+
+`appraised_value`, `market_price`, and `SpecialOrder.compute_item_price()` all resolve through this one function with different `PriceConfig` presets.
+
 ### Factory
 
 ```gdscript
 static func create(data: ItemData, veil_chance: float = 0.0) -> ItemEntry
 # Rolls condition, sets layer_index (0 if veiled, 1 otherwise),
 # initialises knowledge_min/max via KnowledgeManager.get_price_range().
+```
+
+---
+
+## PriceConfig (`game/shared/item_entry/price_config.gd`)
+
+Value object describing which factors participate in a price calculation. Passed to `ItemEntry.compute_price()` so every caller selects its pricing policy declaratively instead of duplicating the math.
+
+```gdscript
+class_name PriceConfig
+extends RefCounted
+
+var condition: bool = false
+var knowledge: bool = false
+var market: bool = false
+var multiplier: float = 1.0      # uniform scalar applied after all factor terms
+
+static func plain() -> PriceConfig
+static func with_condition() -> PriceConfig
+static func with_appraisal() -> PriceConfig     # condition + knowledge
+static func with_market() -> PriceConfig        # condition + knowledge + market
+```
+
+`ItemRegistry` caches one instance of each preset (`price_config_plain`, `price_config_with_condition`, `price_config_with_appraisal`, `price_config_with_market`) at startup so row rendering never allocates. `SpecialOrder` builds and caches its own `PriceConfig` from its per-order flags plus its rolled buff (see `../meta/special_orders.md`).
+
+---
+
+## SpecialOrder (`game/shared/special_order/special_order.gd`)
+
+Runtime representation of an active special order for a merchant. Generated from a `SpecialOrderData` template by `MerchantRegistry._generate_order()`; persisted per merchant via `SaveManager`.
+
+```gdscript
+class_name SpecialOrder
+extends RefCounted
+
+var id: String                          # "{merchant_id}_{counter}" — globally unique, persisted
+var special_order_id: String            # source template id
+var merchant_id: String
+var slots: Array[OrderSlot] = []
+var buff: float = 1.0                   # rolled once in [buff_min, buff_max]
+var completion_bonus: int = 0
+var deadline_day: int = 0               # absolute day (current_day + template.deadline_days)
+var uses_condition: bool = false
+var uses_knowledge: bool = false
+var uses_market: bool = false
+var allow_partial_delivery: bool = false
+var pricing_config: PriceConfig = null  # rebuilt from flags + buff on create() / from_dict()
+
+enum Eligibility { NONE, PARTIAL, FULL }
+
+static func create(template, merchant_id, order_id) -> SpecialOrder
+func is_complete() -> bool
+func is_expired(current_day: int) -> bool
+func check_eligibility(storage: Array) -> Eligibility   # cross-slot accounting at order scope
+func compute_item_price(entry: ItemEntry) -> int
+func rebuild_pricing_config() -> void
+func to_dict() -> Dictionary
+static func from_dict(d: Dictionary) -> SpecialOrder
+```
+
+Full system spec: `../meta/special_orders.md`.
+
+---
+
+## OrderSlot (`game/shared/special_order/order_slot.gd`)
+
+Runtime representation of one fulfillment slot within a `SpecialOrder`.
+
+```gdscript
+class_name OrderSlot
+extends RefCounted
+
+var category: CategoryData
+var min_rarity: int = -1           # -1 = no gate; otherwise ItemData.Rarity value
+var min_condition: float = 0.0     # 0.0 = no gate
+var required_count: int = 1
+var filled_count: int = 0
+
+static func create(pool_entry: SpecialOrderSlotPoolEntry) -> OrderSlot
+func remaining() -> int
+func is_full() -> bool
+func accepts(entry: ItemEntry) -> bool
+func check_eligibility(available: Array) -> Dictionary   # { eligibility, matches }; evaluates independently
+func to_dict() -> Dictionary
+static func from_dict(d: Dictionary) -> OrderSlot
 ```
 
 ---
@@ -287,6 +384,9 @@ Continue button returns to hub via `GameManager.go_to_hub()`.
 - [x] `RunRecord.trailer_items` field added for extra-slot items
 - [x] `ActiveActionEntry` with `to_dict()` / `from_dict()`; stored as plain Dicts in SaveManager
 - [x] `DaySummaryScene` — standalone scene replacing old `DaySummaryPanel` + `DayPassPopup`
+- [x] `PriceConfig` value object + `ItemEntry.compute_price()` unified pipeline shared by appraised / market / special order prices; `ItemRegistry` preset cache
+- [x] `SpecialOrder` runtime type with `Eligibility` enum, `check_eligibility()` (cross-slot accounting), `compute_item_price()`, and `to_dict()` / `from_dict()`
+- [x] `OrderSlot` runtime type with `accepts()`, per-slot `check_eligibility()`, and `to_dict()` / `from_dict()`
 
 ## Soon
 
