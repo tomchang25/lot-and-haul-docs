@@ -103,27 +103,22 @@ Each order in the merchant's list carries an at-a-glance indicator of whether
 current storage can fulfill it — fully, partially, or not at all — so the
 decision to open an order is informed before the click.
 
-### Immediate next — Other systems
-
-- **Director system skeleton** — get all three runs flowing end-to-end with placeholder content first.
-- **Dialog system** — linear first, Uncle branching second.
-- **Bank / Bankruptcy** — daily interest, game-over condition, optional loans. No hard blocker.
-
 ---
 
-## Pending Features
+**Negotiation auto-accept on small gaps**
 
-**Phase 3 — Content & calibration**: requires genuine run pressure from earlier phases to calibrate.
-What a skill costs, how aggressive an NPC should be, which perks matter — none of these values
-stabilise until earlier systems impose real constraints on a run.
+The merchant counters on every submission regardless of how close the proposal
+is to its current offer. When the player lands a few dollars above the standing
+offer, the forced extra round produces no meaningful price movement while
+burning a submission and trickling more anger — it punishes near-agreement.
 
-**Market system evolution**:
+When the player's proposal sits within a small margin of the merchant's current
+offer, the merchant accepts at the proposed price instead of countering.
+Outside that margin the existing anger-and-counter flow still runs.
 
-- **Mean-reversion drift** — replace pure random walk with drift that pulls super-category means back toward 1.0, so trends eventually correct. Current random walk is OK for bring-up but can leave a category depressed / inflated forever.
-- **Per-item ceiling computation** — replace the flat `ceiling_multiplier` roll with a formula derived from `rarity`, `condition`, and `remaining identity layers`. Rarer / better-preserved / less-identified items should have more upside for the player to negotiate into.
-- **Ceiling reveal perks** — perks or skills that tighten / remove the uncertainty on the ceiling range indicator in the negotiation dialog.
-
----
+Open question: the "small" threshold needs a definition — percentage of
+gap-to-ceiling, flat dollar amount, or fraction of base offer. Each produces a
+different feel at scale.
 
 **Order slot eligibility preview**
 
@@ -148,6 +143,28 @@ player can pick which slots to work on by scanning rather than probing.
   rollup still reflects whether a single assignment plan can satisfy every
   slot together, since that's the question that matters when deciding
   whether to open the order at all.
+
+### Immediate next — Other systems
+
+- **Director system skeleton** — get all three runs flowing end-to-end with placeholder content first.
+- **Dialog system** — linear first, Uncle branching second.
+- **Bank / Bankruptcy** — daily interest, game-over condition, optional loans. No hard blocker.
+
+---
+
+## Pending Features
+
+**Phase 3 — Content & calibration**: requires genuine run pressure from earlier phases to calibrate.
+What a skill costs, how aggressive an NPC should be, which perks matter — none of these values
+stabilise until earlier systems impose real constraints on a run.
+
+**Market system evolution**:
+
+- **Mean-reversion drift** — replace pure random walk with drift that pulls super-category means back toward 1.0, so trends eventually correct. Current random walk is OK for bring-up but can leave a category depressed / inflated forever.
+- **Per-item ceiling computation** — replace the flat `ceiling_multiplier` roll with a formula derived from `rarity`, `condition`, and `remaining identity layers`. Rarer / better-preserved / less-identified items should have more upside for the player to negotiate into.
+- **Ceiling reveal perks** — perks or skills that tighten / remove the uncertainty on the ceiling range indicator in the negotiation dialog.
+
+---
 
 **Item knowledge & inspection overhaul**:
 
@@ -221,23 +238,6 @@ Whether a rarity-gated slot accepts an item is determined against the player's
 current information about the item, not the true value. An item the player does
 not yet know is Legendary does not slot into a Legendary-only order just
 because it truly is one.
-
----
-
-**Negotiation auto-accept on small gaps**
-
-The merchant counters on every submission regardless of how close the proposal
-is to its current offer. When the player lands a few dollars above the standing
-offer, the forced extra round produces no meaningful price movement while
-burning a submission and trickling more anger — it punishes near-agreement.
-
-When the player's proposal sits within a small margin of the merchant's current
-offer, the merchant accepts at the proposed price instead of countering.
-Outside that margin the existing anger-and-counter flow still runs.
-
-Open question: the "small" threshold needs a definition — percentage of
-gap-to-ceiling, flat dollar amount, or fraction of base offer. Each produces a
-different feel at scale.
 
 ---
 
