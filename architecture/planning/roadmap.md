@@ -144,6 +144,24 @@ player can pick which slots to work on by scanning rather than probing.
   slot together, since that's the question that matters when deciding
   whether to open the order at all.
 
+---
+
+**Independent price columns replace single-mode PRICE column**
+
+`ItemRow` has one `PRICE` column whose value is controlled by `ItemViewContext.PriceMode` — an enum that selects among estimated, appraised, base, merchant offer, or special order price. Each stage factory picks exactly one mode, so the row can only ever show a single price. When the player enters a transaction view (merchant shop or fulfillment panel), the offer price displaces the appraised value entirely. There is no side-by-side comparison; the player must remember or hover to recover the reference price they need to judge whether the deal is good.
+
+The fix eliminates `PriceMode` and promotes each price type to its own `Column` enum member. Transaction views compose whichever price columns are relevant — e.g. `APPRAISED_VALUE` alongside `MERCHANT_OFFER` in the shop, or `APPRAISED_VALUE`, `MERCHANT_OFFER`, and `SPECIAL_ORDER` together in the fulfillment panel. Each column sorts independently via header click. Non-transaction stages continue to show a single appropriate price column, so nothing changes for inspection, cargo, or storage.
+
+---
+
+**Trade result summary**
+
+When a negotiation resolves — accept, auto-accept, or final offer — the scene jumps straight to the merchant hub with no acknowledgment of what just happened. The player has to infer the result from memory or by checking their cash balance.
+
+- **Post-trade message box** — A modal popup appears after any acceptance path, before the transition to the merchant hub. It shows two lines: the number of items sold and the total cash received. A single dismiss button closes the popup and continues to the merchant hub.
+
+---
+
 ### Immediate next — Other systems
 
 - **Director system skeleton** — get all three runs flowing end-to-end with placeholder content first.
@@ -184,43 +202,27 @@ Why: The current system exposes too much structured information too cheaply. Pla
 
 ---
 
-**Per-slot item requirements**
+**Special order requirement and pricing expressiveness**
 
-Slot gates are generated from two hardcoded constants — the rarity floor is
-always Uncommon and the condition floor is always 60% — with only a
-probability-per-gate exposed to designers. This collapses the entire
-requirement design space to binary gates at fixed thresholds, so a premium
-order reads to the player as "Normal × 1, Uncommon+ × 1" rather than the
-intended "Epic+ at 80% condition × 1, Uncommon+ at 50% condition × 3". Orders
-need to express graded quality requirements, not on/off gates.
+The special order system collapses its entire design space into binary switches at hardcoded thresholds. Slot requirements roll either "no gate" or "Uncommon at 60% condition" with only a per-gate probability exposed to designers. Pricing either includes condition or ignores it, with no connection to the player's accumulated knowledge rank or the current market trend. The runtime data already stores continuous values for rarity floor, condition floor, and price components — the bottleneck is entirely in the template layer and the generation logic that reads it.
 
-- **Per-slot requirement data** — Each slot carries its own rarity floor,
-  condition floor, and required count as designer-authored values on the order
-  template. A single order can combine multiple distinct quality tiers across
-  its slots, so premium orders read as legibly premium rather than two
-  near-identical gates.
+This means a premium antique dealer order and a junk pawn order can only differ in buff multiplier and gate probability. A high-tier merchant cannot ask for Epic-quality items in pristine condition, and a market-savvy order cannot pay more when the trend favours the player. The result is that orders read as "normal stuff" or "slightly filtered normal stuff" instead of expressing a legible quality–reward tradeoff.
 
-- **Configurable payout basis** — Each order template selects whether per-item
-  payout derives from base value or current market price, independent of the
-  existing condition-multiplier toggle. Designers can author orders that track
-  market fluctuations and orders that pay a steady flat rate.
+- **Graded slot requirements** — Each slot specifies a rarity floor and a condition floor as continuous designer-authored values, not coin-flip gates at fixed constants. A single order can mix slots at different tiers so the player sees "one Epic at 80% condition, three Uncommon at any condition" rather than a flat list of identical gates.
+
+- **Knowledge rank in order pricing** — Order payout reflects the player's super-category rank the same way normal appraisal does. An expert delivering the same item earns more than a novice, preserving the incentive to deepen category mastery even when filling orders.
+
+- **Market trend as a pricing lever** — Designers flag whether an order tracks the daily market factor or pays a fixed rate. Trend-following orders reward timing; fixed-rate orders act as a hedge when the market dips. The distinction gives merchants different economic personalities.
 
 ---
 
-**Transaction views show reference price alongside offer**
+**Acquisition cost tracking on ItemEntry**
 
-Item rows render a single price whose meaning is context-dependent — appraised
-value in storage, merchant offer in the shop, order payout in fulfillment. The
-player loses the reference price the moment they enter a transaction view,
-leaving them unable to compare the offer in front of them against what the item
-is broadly worth. This is most acute in the fulfillment panel, where the
-order's per-item payout displaces any market signal entirely and the player
-can't tell whether turning the item in is a good or bad trade.
+ItemEntry has no record of what the player paid for it. Without that, no downstream system — trade summaries, storage views, history logs — can show true profit. The data gap blocks any future cost-versus-sale feedback.
 
-In transaction views — merchant shop and order fulfillment — the row carries
-two prices side-by-side: the item's reference value (market or appraised) and
-the offer being evaluated. The "what is this worth to me" anchor never
-disappears, and the comparison takes no hover or mode-swap.
+Items are bought in bulk at auction as part of a lot, so there is no per-item price. One workable split: when the lot purchase resolves, distribute the total paid price across won items proportional to each item's base_value at that moment. Each ItemEntry stores its share as a permanent field set once at acquisition time and never modified.
+
+Open question: base_value changes when the player unlocks deeper identity layers — the split needs to use the base_value of each item's active layer at the time of purchase, before any post-auction unlocks happen. Whether that timing is already guaranteed by the current lot-resolution order needs verification.
 
 ---
 
