@@ -162,6 +162,20 @@ When a negotiation resolves — accept, auto-accept, or final offer — the scen
 
 ---
 
+**Special order requirement and pricing expressiveness**
+
+The special order system collapses its entire design space into binary switches at hardcoded thresholds. Slot requirements roll either "no gate" or "Uncommon at 60% condition" with only a per-gate probability exposed to designers. Pricing either includes condition or ignores it, with no connection to the player's accumulated knowledge rank or the current market trend. The runtime data already stores continuous values for rarity floor, condition floor, and price components — the bottleneck is entirely in the template layer and the generation logic that reads it.
+
+This means a premium antique dealer order and a junk pawn order can only differ in buff multiplier and gate probability. A high-tier merchant cannot ask for Epic-quality items in pristine condition, and a market-savvy order cannot pay more when the trend favours the player. The result is that orders read as "normal stuff" or "slightly filtered normal stuff" instead of expressing a legible quality–reward tradeoff.
+
+- **Graded slot requirements** — Each slot specifies a rarity floor and a condition floor as continuous designer-authored values, not coin-flip gates at fixed constants. A single order can mix slots at different tiers so the player sees "one Epic at 80% condition, three Uncommon at any condition" rather than a flat list of identical gates.
+
+- **Knowledge rank in order pricing** — Order payout reflects the player's super-category rank the same way normal appraisal does. An expert delivering the same item earns more than a novice, preserving the incentive to deepen category mastery even when filling orders.
+
+- **Market trend as a pricing lever** — Designers flag whether an order tracks the daily market factor or pays a fixed rate. Trend-following orders reward timing; fixed-rate orders act as a hedge when the market dips. The distinction gives merchants different economic personalities.
+
+---
+
 ### Immediate next — Other systems
 
 - **Director system skeleton** — get all three runs flowing end-to-end with placeholder content first.
@@ -199,20 +213,6 @@ Why: The current system exposes too much structured information too cheaply. Pla
 - **Per-lot inspection replaces per-item** — The inspection phase operates on the lot as a whole, not on individual items. Each action randomly targets an unveiled item in the lot. Actions: Check Condition (raises `condition_accuracy` on a random item), Check Rarity (raises `rarity_accuracy`), Try to Peek (partially reveals a partial-veil item), X-Ray Peek (reveals a full-veil item, requires perk). Category knowledge points are awarded based on whichever item is hit.
 
 - **Research hub replaces Storage action popup + Market Research** — The home hub gains a Research sub-screen alongside Storage. Items with unlocked layers remaining can be slotted into research (4 active slots, 8 queued). Each day-advance tick applies effects to all active slots based on a player-set priority: condition repair, condition accuracy, rarity accuracy, or layer unlock attempt. Market Research as a separate action is removed; its price-range-narrowing effect becomes one output of the research priority system. The old `ActionContext.AUTO` / `HOME` split and `MARKET_RESEARCH` action type are removed.
-
----
-
-**Special order requirement and pricing expressiveness**
-
-The special order system collapses its entire design space into binary switches at hardcoded thresholds. Slot requirements roll either "no gate" or "Uncommon at 60% condition" with only a per-gate probability exposed to designers. Pricing either includes condition or ignores it, with no connection to the player's accumulated knowledge rank or the current market trend. The runtime data already stores continuous values for rarity floor, condition floor, and price components — the bottleneck is entirely in the template layer and the generation logic that reads it.
-
-This means a premium antique dealer order and a junk pawn order can only differ in buff multiplier and gate probability. A high-tier merchant cannot ask for Epic-quality items in pristine condition, and a market-savvy order cannot pay more when the trend favours the player. The result is that orders read as "normal stuff" or "slightly filtered normal stuff" instead of expressing a legible quality–reward tradeoff.
-
-- **Graded slot requirements** — Each slot specifies a rarity floor and a condition floor as continuous designer-authored values, not coin-flip gates at fixed constants. A single order can mix slots at different tiers so the player sees "one Epic at 80% condition, three Uncommon at any condition" rather than a flat list of identical gates.
-
-- **Knowledge rank in order pricing** — Order payout reflects the player's super-category rank the same way normal appraisal does. An expert delivering the same item earns more than a novice, preserving the incentive to deepen category mastery even when filling orders.
-
-- **Market trend as a pricing lever** — Designers flag whether an order tracks the daily market factor or pays a fixed rate. Trend-following orders reward timing; fixed-rate orders act as a hedge when the market dips. The distinction gives merchants different economic personalities.
 
 ---
 
