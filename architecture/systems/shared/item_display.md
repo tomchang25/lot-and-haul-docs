@@ -14,7 +14,6 @@ components never branch on stage directly — they read only the mode fields.
 ```gdscript
 enum ConditionMode { RESPECT_INSPECT_LEVEL, FORCE_INSPECT_MAX, FORCE_TRUE_VALUE }
 enum PotentialMode { RESPECT_INSPECT_LEVEL, FORCE_FULL }
-enum PriceMode     { ESTIMATED_VALUE, APPRAISED_VALUE, BASE_VALUE, MERCHANT_OFFER }
 
 enum Stage {
     INSPECTION,
@@ -24,26 +23,34 @@ enum Stage {
     RUN_REVIEW,
     STORAGE,
     MERCHANT_SHOP,
+    FULFILLMENT_PANEL,
 }
 
-var merchant: MerchantData = null   # set only by for_merchant_shop(); used by MERCHANT_OFFER price mode
+var stage: Stage
+var condition_mode: ConditionMode = ConditionMode.RESPECT_INSPECT_LEVEL
+var potential_mode: PotentialMode = PotentialMode.RESPECT_INSPECT_LEVEL
+var merchant: MerchantData = null   # set only by for_merchant_shop(); used by MERCHANT_OFFER column
+var order:    SpecialOrder  = null  # set only by for_fulfillment();   used by SPECIAL_ORDER column
 ```
 
-Column visibility is no longer driven by `show_cargo_stats` — each consuming scene passes
-its own `columns: Array` of `ItemRow.Column` values to `ItemRow.setup()` and
-`ItemListPanel.setup()`. See the ItemRow / ItemListPanel sections below.
+There is **no `PriceMode`**. Each price type is an independent `ItemRow.Column`, and each consuming scene composes whichever price columns it needs. Transaction views can display multiple price columns side by side — e.g. `APPRAISED_VALUE` alongside `MERCHANT_OFFER` in the shop, or `APPRAISED_VALUE` + `SPECIAL_ORDER` in the fulfillment panel — so the player never loses the reference price behind the offer price. Non-transaction stages pick a single appropriate price column. Header click sorts on any column independently.
+
+Column visibility is driven by each consuming scene passing its own `columns: Array` of
+`ItemRow.Column` values to `ItemRow.setup()` and `ItemListPanel.setup()`. See the
+ItemRow / ItemListPanel sections below.
 
 ### Factories
 
-| Factory                      | Condition         | Potential  | Price           | Stage         |
-| ---------------------------- | ----------------- | ---------- | --------------- | ------------- |
-| `for_inspection()`           | RESPECT           | RESPECT    | ESTIMATED_VALUE | INSPECTION    |
-| `for_list_review()`          | RESPECT           | RESPECT    | ESTIMATED_VALUE | LIST_REVIEW   |
-| `for_reveal()`               | RESPECT           | RESPECT    | ESTIMATED_VALUE | REVEAL        |
-| `for_cargo()`                | FORCE_INSPECT_MAX | FORCE_FULL | ESTIMATED_VALUE | CARGO         |
-| `for_run_review()`           | FORCE_TRUE_VALUE  | FORCE_FULL | APPRAISED_VALUE | RUN_REVIEW    |
-| `for_storage()`              | FORCE_TRUE_VALUE  | FORCE_FULL | APPRAISED_VALUE | STORAGE       |
-| `for_merchant_shop(merchant)` | FORCE_TRUE_VALUE  | FORCE_FULL | MERCHANT_OFFER  | MERCHANT_SHOP |
+| Factory                       | Condition         | Potential  | Stage             | Extra          |
+| ----------------------------- | ----------------- | ---------- | ----------------- | -------------- |
+| `for_inspection()`            | RESPECT           | RESPECT    | INSPECTION        | —              |
+| `for_list_review()`           | RESPECT           | RESPECT    | LIST_REVIEW       | —              |
+| `for_reveal()`                | RESPECT           | RESPECT    | REVEAL            | —              |
+| `for_cargo()`                 | FORCE_INSPECT_MAX | FORCE_FULL | CARGO             | —              |
+| `for_run_review()`            | FORCE_TRUE_VALUE  | FORCE_FULL | RUN_REVIEW        | —              |
+| `for_storage()`               | FORCE_TRUE_VALUE  | FORCE_FULL | STORAGE           | —              |
+| `for_merchant_shop(merchant)` | FORCE_TRUE_VALUE  | FORCE_FULL | MERCHANT_SHOP     | `merchant` set |
+| `for_fulfillment(order)`      | FORCE_TRUE_VALUE  | FORCE_FULL | FULFILLMENT_PANEL | `order` set    |
 
 ---
 
@@ -57,20 +64,35 @@ Generalised item row used by list_review, reveal, run_review, storage, and pawn_
 enum Column {
     NAME,
     CONDITION,
-    PRICE,          # header text is dynamic via get_price_header(ctx)
+    ESTIMATED_VALUE,
+    APPRAISED_VALUE,
+    BASE_VALUE,
+    MERCHANT_OFFER,   # header text is dynamic via get_price_header(ctx) — "<merchant> Offer"
+    SPECIAL_ORDER,    # header "Order Price"; value resolved against ctx.order
     POTENTIAL,
     WEIGHT,
     GRID,
-    MARKET_FACTOR,  # displays today's demand delta (e.g. "+12%")
+    MARKET_FACTOR,    # displays today's demand delta (e.g. "+12%")
 }
 ```
 
-`PRICE` merges the old `BASE_VALUE`, `ESTIMATE`, and `SELL_PRICE` label nodes into a single column whose header and value are driven by `ItemViewContext.price_mode`.
+Each price column renders from its own getter on `ItemEntry`:
+
+| Column            | Label text                                   | Numeric value for sort                  |
+| ----------------- | -------------------------------------------- | --------------------------------------- |
+| `ESTIMATED_VALUE` | `estimated_value_label`                      | `estimated_value_sort_value()`          |
+| `APPRAISED_VALUE` | `appraised_value_label`                      | `appraised_value`                       |
+| `BASE_VALUE`      | `base_value_label_text()`                    | `base_value_sort_value()`               |
+| `MERCHANT_OFFER`  | `merchant_offer_label(ctx.merchant)`         | `merchant_offer_value(ctx.merchant)`    |
+| `SPECIAL_ORDER`   | `special_order_label(ctx.order)`             | `special_order_value(ctx.order)`        |
+
+Because every price column is independent, transaction views compose them freely: shop uses `APPRAISED_VALUE` + `MERCHANT_OFFER` side by side so the reference price stays visible while negotiating; fulfillment panel uses `APPRAISED_VALUE` + `SPECIAL_ORDER` for the same reason. Inspection, cargo, storage, and run review keep a single appropriate price column.
 
 ```gdscript
 static func get_price_header(ctx: ItemViewContext) -> String
-# Returns "Est. Value" / "Appraised Value" / "Base Value" / "<merchant> Offer"
-# depending on ctx.price_mode.
+# Bridge helper for ItemRowTooltip's single-price row — returns the price header
+# appropriate for ctx.stage (e.g. "Est. Value", "Appraised Value", "<merchant> Offer",
+# "Order Price"). ItemRow itself doesn't need it because each column owns a static header.
 ```
 
 ### SelectionState (renamed from CargoState)
@@ -118,7 +140,7 @@ func populate(entries: Array[ItemEntry]) -> void
 func get_row(entry: ItemEntry) -> ItemRow
 func clear() -> void
 func refresh_row(entry: ItemEntry) -> void
-func rebuild_header() -> void     # call after changing ctx.price_mode
+func rebuild_header() -> void     # call after changing the columns array
 func apply_sort() -> void
 ```
 
@@ -138,6 +160,8 @@ Header buttons are runtime-built from the `columns` array (permitted exception u
 - [x] `Stage.MERCHANT_SHOP` and `for_merchant_shop(merchant)` factory; `merchant: MerchantData` field on context
 - [x] `Column.MARKET_FACTOR` — displays market demand delta per category
 - [x] `for_reveal()` modes changed to `RESPECT_INSPECT_LEVEL` for both condition and potential (previously `FORCE` modes)
+- [x] Independent price columns replace `PriceMode` — `ESTIMATED_VALUE` / `APPRAISED_VALUE` / `BASE_VALUE` / `MERCHANT_OFFER` / `SPECIAL_ORDER` each render from its own `ItemEntry` getter and sort independently; transaction views compose multiple price columns side by side (shop = `APPRAISED_VALUE` + `MERCHANT_OFFER`; fulfillment = `APPRAISED_VALUE` + `SPECIAL_ORDER`)
+- [x] `Stage.FULFILLMENT_PANEL` and `for_fulfillment(order)` factory; `order: SpecialOrder` field on context — powers the `SPECIAL_ORDER` column in the fulfillment panel
 
 ## Soon
 
