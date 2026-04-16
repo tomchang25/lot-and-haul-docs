@@ -118,12 +118,12 @@ because it truly is one.
 
 ## Draft Features
 
-See `../systems/meta/hub_home.md` for full specs on each. Summary:
+See the linked system docs for full specs on each. Summary:
 
-- **Garage Sell** — another auction-type scene. Deferred for scope.
-- **Reputation + Scam Flow** — faction reputation, scam detection branches. Builds on `MerchantData` (now shipped).
-- **Own Shop** — player-listed items, sell frequency vs. market rate. Depends on selling flow.
-- **Expert Network (Appraisers)** — design question unresolved (see `../systems/meta/hub_home.md`).
-- **Museum / Prestige** — prestige design decisions needed first.
-- **Auction Modifier: All-Base-Layer Run** — requires auction modifier system design.
+- **Garage Sell** — another auction-type scene. Deferred for scope. (`../systems/meta/merchant.md`)
+- **Reputation + Scam Flow** — faction reputation, scam detection branches. Builds on `MerchantData` (now shipped). (`../systems/meta/merchant.md`)
+- **Own Shop** — player-listed items, sell frequency vs. market rate. Depends on selling flow. (`../systems/meta/merchant.md`)
+- **Expert Network (Appraisers)** — design question unresolved. (`../systems/meta/merchant.md`)
+- **Museum / Prestige** — prestige design decisions needed first. (`../systems/meta/hub_home.md`)
+- **Auction Modifier: All-Base-Layer Run** — requires auction modifier system design. (`../systems/meta/hub_home.md`)
 - **Training Courses** — `TrainingCourseData` resource, hub Training button. Deferred.

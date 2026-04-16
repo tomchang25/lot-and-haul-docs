@@ -187,7 +187,7 @@ var last_order_roll_day: int = -1
 var negotiations_used_today: int = 0
 ```
 
-`.tres` files under `data/tres/merchants/`. `MerchantRegistry` autoload loads all `.tres` and exposes `get_merchant(id)` / `get_all_merchants()` / `get_available_merchants()`. See `../meta/hub_home.md` for the full merchant flow and `../meta/special_orders.md` for the order sub-system.
+`.tres` files under `data/tres/merchants/`. `MerchantRegistry` autoload loads all `.tres` and exposes `get_merchant(id)` / `get_all_merchants()` / `get_available_merchants()`. See `../meta/merchant.md` for the merchant overview and hub, `../meta/merchant_shop.md` for the shop + negotiation flow, and `../meta/special_orders.md` for the order sub-system.
 
 ### `SpecialOrderData` (`data/definitions/special_order_data.gd`)
 
