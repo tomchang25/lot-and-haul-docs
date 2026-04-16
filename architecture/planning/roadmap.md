@@ -20,9 +20,7 @@ Naming convention: `_value` = appraisal-side, `_price` / `_offer` = transaction-
 
 ---
 
-## Current Phase
-
-### Done
+## Done
 
 - **Merchant v2 skeleton** — `MerchantData` resource, `MerchantRegistry` autoload, YAML pipeline, `merchant_hub` navigation, `merchant_shop_scene`.
 - **Specialist Merchant pricing logic** — `accepted_super_categories` / `price_multiplier` / `accepts_off_category` / `off_category_multiplier` wired in `offer_for()`.
@@ -59,6 +57,30 @@ The startup audit verifies that the active and owned car ids, and the unlocked p
 - **Coverage for every id-bearing save field** — The audit walks each save field that stores a registry id and verifies it resolves against the matching registry. Missing ids are reported once per field with the offending key, matching how car and perk checks already behave.
 
 ---
+
+**Registry boilerplate duplication**
+
+Every resource-backed system — items, cars, locations, merchants, perks, skills —
+defines its own registry autoload with the same underlying shape: a dictionary
+keyed by id, a loader on ready, and the same lookup / list / size surface.
+Only the element type differs.
+
+The duplication has already started to drift. Some registries grew extras —
+a super-category index, per-day order bookkeeping — while the others stayed minimal.
+
+**Decision:** A shared base class is not worth the cost. GDScript's lack of
+generics means typed `get_<T>()` / `get_all_<T>()` wrappers must be
+re-declared in every subclass regardless, saving only the loader boilerplate.
+The registry standard doc (`dev/standards/registries.md`) and its checklist
+are the enforcement mechanism.
+
+Cross-cutting behaviour (migrations, validation, audit) is addressed separately
+by the `RegistryCoordinator` autoload — each registry opts in by implementing
+`migrate()` / `validate()` and registering in `_ready()`.
+
+---
+
+## Current Phase
 
 #### Step 4 — Merchant content
 
@@ -137,14 +159,6 @@ Whether a rarity-gated slot accepts an item is determined against the player's
 current information about the item, not the true value. An item the player does
 not yet know is Legendary does not slot into a Legendary-only order just
 because it truly is one.
-
----
-
-**Registry boilerplate duplication**
-
-Every resource-backed system — items, cars, locations, merchants, perks, skills — defines its own registry autoload with the same underlying shape: a dictionary keyed by id, a loader on ready, and the same lookup / list / size surface. Only the element type differs.
-
-The duplication has already started to drift. Some registries grew extras — a super-category index, per-day order bookkeeping — while the others stayed minimal. New cross-cutting behaviour (migrations, validation hooks, audit integration) has no obvious shared home, so anything added in one registry tends not to propagate to the rest.
 
 ---
 
