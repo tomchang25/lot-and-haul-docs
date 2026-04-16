@@ -36,6 +36,30 @@ Naming convention: `_value` = appraisal-side, `_price` / `_offer` = transaction-
 
 ---
 
+**Categories reached through items**
+
+Items, categories, and super-categories are all designer-authored resources with their own ids, display names, and tuning. But only items have a registry. Every question about a category or super-category that isn't answered through a direct reference on an in-hand item is answered by scanning the full item list.
+
+This shows up wherever no item is already in hand — rendering the mastery panel, computing daily market drift for a category, describing a lot's item draw table, resolving a display name from an id. The only built index from super-category to its members is constructed by walking items at startup, display-name lookups scan items on every call, and the inverse question — which super-category owns a given category — is a linear scan inside the daily market roll.
+
+Nothing is incorrect, but the data shape is upside down. Categories and super-categories are the stable, small, designer-authored data; items are the larger table that references them. The registry layer doesn't reflect that direction.
+
+- **First-class category and super-category registries** — Each has its own autoload keyed by id, built by loading its own resource directory directly. Lookups by id, display-name resolution, and the super-to-members mapping are served from these registries.
+
+- **Item registry holds items only** — The super-category index, the display-name helpers for both levels, and the id-based category lookup move to the new registries. Item queries stay where they are.
+
+- **Direct super-for-category lookup** — Each category resource already knows its super-category; the category registry exposes that directly, replacing the linear scan inside the market roll.
+
+---
+
+**Registry audit covers cars and perks, nothing else**
+
+The startup audit verifies that the active and owned car ids, and the unlocked perk ids, still resolve against their registries. Every other save-persisted id can go stale without the audit noticing — available locations, tracked skill levels, accumulated category points, market drift means, and the items and categories referenced inside in-flight merchant order slots. When something is renamed or removed in the data pipeline, these surface later as silent misses or null chases rather than as a clear boot-time failure.
+
+- **Coverage for every id-bearing save field** — The audit walks each save field that stores a registry id and verifies it resolves against the matching registry. Missing ids are reported once per field with the offending key, matching how car and perk checks already behave.
+
+---
+
 #### Step 4 — Merchant content
 
 - Specialist merchant YAML: Antique Dealer, Arms Dealer, Fashion Buyer.
@@ -121,30 +145,6 @@ because it truly is one.
 Every resource-backed system — items, cars, locations, merchants, perks, skills — defines its own registry autoload with the same underlying shape: a dictionary keyed by id, a loader on ready, and the same lookup / list / size surface. Only the element type differs.
 
 The duplication has already started to drift. Some registries grew extras — a super-category index, per-day order bookkeeping — while the others stayed minimal. New cross-cutting behaviour (migrations, validation hooks, audit integration) has no obvious shared home, so anything added in one registry tends not to propagate to the rest.
-
----
-
-**Registry audit covers cars and perks, nothing else**
-
-The startup audit verifies that the active and owned car ids, and the unlocked perk ids, still resolve against their registries. Every other save-persisted id can go stale without the audit noticing — available locations, tracked skill levels, accumulated category points, market drift means, and the items and categories referenced inside in-flight merchant order slots. When something is renamed or removed in the data pipeline, these surface later as silent misses or null chases rather than as a clear boot-time failure.
-
-- **Coverage for every id-bearing save field** — The audit walks each save field that stores a registry id and verifies it resolves against the matching registry. Missing ids are reported once per field with the offending key, matching how car and perk checks already behave.
-
----
-
-**Categories reached through items**
-
-Items, categories, and super-categories are all designer-authored resources with their own ids, display names, and tuning. But only items have a registry. Every question about a category or super-category that isn't answered through a direct reference on an in-hand item is answered by scanning the full item list.
-
-This shows up wherever no item is already in hand — rendering the mastery panel, computing daily market drift for a category, describing a lot's item draw table, resolving a display name from an id. The only built index from super-category to its members is constructed by walking items at startup, display-name lookups scan items on every call, and the inverse question — which super-category owns a given category — is a linear scan inside the daily market roll.
-
-Nothing is incorrect, but the data shape is upside down. Categories and super-categories are the stable, small, designer-authored data; items are the larger table that references them. The registry layer doesn't reflect that direction.
-
-- **First-class category and super-category registries** — Each has its own autoload keyed by id, built by loading its own resource directory directly. Lookups by id, display-name resolution, and the super-to-members mapping are served from these registries.
-
-- **Item registry holds items only** — The super-category index, the display-name helpers for both levels, and the id-based category lookup move to the new registries. Item queries stay where they are.
-
-- **Direct super-for-category lookup** — Each category resource already knows its super-category; the category registry exposes that directly, replacing the linear scan inside the market roll.
 
 ---
 
