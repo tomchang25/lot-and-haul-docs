@@ -146,8 +146,6 @@ Nothing is incorrect, but the data shape is upside down. Categories and super-ca
 
 - **Direct super-for-category lookup** — Each category resource already knows its super-category; the category registry exposes that directly, replacing the linear scan inside the market roll.
 
-Open question: whether to keep the old item-registry accessors as shims during the transition. A clean cutover touches the market manager, mastery panel, lot card, and several display callsites at once; shims let them migrate one at a time at the cost of running both APIs live for a while.
-
 ---
 
 ## Draft Features
