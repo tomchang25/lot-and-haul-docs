@@ -1,6 +1,6 @@
 # Merchant
 
-Meta sub-system in `game/meta/merchant/` — merchant hub navigation, the merchant data model, and the deferred selling surfaces (garage sell, own shop, reputation/scam, expert network) that hang off the merchant flow.
+Meta sub-system in `game/meta/merchant/` — merchant hub navigation, the merchant data model, and the deferred merchant-relationship surfaces (reputation/scam, expert network) that hang off the merchant flow.
 
 The two transaction surfaces have their own docs:
 
@@ -44,14 +44,6 @@ On Merchant from hub: `GameManager.go_to_merchant_hub()`. From merchant hub Shop
 
 `game/meta/merchant/merchant_hub.gd` + `.tscn` — navigation menu for choosing which merchant to sell to. Lists all merchants from `MerchantRegistry.get_all_merchants()` as a row per merchant. The row's Shop button is perk-gated (tooltip `"Requires perk: <id>"`) and closed-gated (tooltip `"Closed — come back tomorrow"` via `MerchantRegistry.can_negotiate()`). Merchants with `order_roll_cadence > 0` also get an "Orders (N)" button that routes to the Fulfillment Panel via `GameManager.go_to_fulfillment_panel(merchant)`; it's disabled when `active_orders` is empty or the merchant is perk-locked. Back returns to Hub.
 
-### Garage Sell _(deferred)_
-
-Another auction-type scene modelled on the existing `game/run/auction/` structure. No hard blockers — deferred to avoid scope creep on the selling flow.
-
-### Own Shop _(deferred)_
-
-Player lists items at a set price. Sell frequency scales inversely with ask price vs. market rate. Sale resolution ticks inside `SaveManager.advance_days()` alongside action ticking.
-
 ### Reputation + Scam Flow _(deferred)_
 
 Reputation tracked per `merchant_id` (or faction) in `SaveManager`. Degrades on scam detection; affects sell rates and merchant access. Scam flow: player sells a misidentified or veiled item at inflated price. Three outcome branches — safe (no effect), post-payment discovery (large penalty), caught during trade (trade cancelled, moderate penalty). Detection probability via new `MerchantData.detection_skill: float` field.
@@ -92,5 +84,4 @@ _None._
 
 ## Later
 
-- [ ] Garage Sell scene modelled on `game/run/auction/`
-- [ ] Own Shop — player listings resolved inside `advance_days()`
+_None._

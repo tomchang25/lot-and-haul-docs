@@ -75,11 +75,19 @@ Returning from `DaySummaryScene` via `GameManager.go_to_hub()` re-runs hub `_rea
 
 The merchant flow is owned by its own docs:
 
-- `merchant.md` — Merchant Hub navigation, `MerchantData` reference, deferred selling surfaces (Garage Sell, Own Shop, Reputation + Scam Flow, Expert Network)
+- `merchant.md` — Merchant Hub navigation, `MerchantData` reference, deferred merchant-relationship surfaces (Reputation + Scam Flow, Expert Network)
 - `merchant_shop.md` — Merchant Shop scene + Negotiation Dialog
 - `special_orders.md` — Special order data model, archetypes, rolling, and the Fulfillment Panel
 
 Hub only owns the **Merchant** button on the hub scene that routes into `GameManager.go_to_merchant_hub()`.
+
+### Garage Sell _(deferred — system unclear)_
+
+Another auction-type scene modelled on the existing `game/run/auction/` structure. No hard blockers — deferred to avoid scope creep on the selling flow. Lives in hub for now because it's unclear whether this is a merchant surface or a separate selling channel.
+
+### Own Shop _(deferred — system unclear)_
+
+Player lists items at a set price. Sell frequency scales inversely with ask price vs. market rate. Sale resolution ticks inside `SaveManager.advance_days()` alongside action ticking. Lives in hub for now because the player-listing surface may not belong to any single merchant.
 
 ### Bank / Bankruptcy _(deferred)_
 
@@ -132,5 +140,7 @@ _None._
 
 ## Later
 
+- [ ] Garage Sell scene modelled on `game/run/auction/` — system placement unclear (merchant vs. standalone)
+- [ ] Own Shop — player listings resolved inside `advance_days()` — system placement unclear
 - [ ] Bank / Bankruptcy — daily interest inside `advance_days()`, bankruptcy game-over, optional loan UI
 - [ ] Warehouse variant support surfaced in hub (different exteriors and lot counts per location — system doc is `../run/location_and_lot.md`)
