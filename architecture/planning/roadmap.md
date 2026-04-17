@@ -117,21 +117,27 @@ stabilise until earlier systems impose real constraints on a run.
 
 ---
 
-**Item knowledge & inspection overhaul**:
+**Item knowledge & inspection overhaul**
 
-Why: The current system exposes too much structured information too cheaply. Players can read layer depth, potential rating, and condition tier directly from the item list, reducing all storage decisions to parameter comparison rather than judgment under uncertainty. The existing inspect actions (per-item, stamina-gated) follow the same logic as the storage list — they just fill in blanks. The goal is to make information feel earned and lossy, not just locked behind a cost.
+The current system exposes too much structured information too cheaply. Players read layer depth, potential rating, and condition tier directly from the item list, which collapses storage decisions into parameter comparison rather than judgment under uncertainty. The existing inspect actions follow the same logic as the storage list — they fill in blanks behind a stamina cost. The goal is to make information feel earned and lossy, not just gated.
 
-- **Accuracy-based condition and rarity display** — Replace the discrete `condition_inspect_level` and `potential_inspect_level` integers with continuous `condition_accuracy: float` and `rarity_accuracy: float` per `ItemEntry`. Display thresholds gate what the player sees: low accuracy shows only coarse buckets (Poor / OK for condition; Common / Uncommon+ for rarity); higher accuracy unlocks finer resolution. All display contexts — inspection, storage, run review — read the accuracy value rather than forcing a mode.
+- **Unified inspection level** — Each item carries a single continuous inspection value in place of the separate condition and potential inspect levels. The UI reads bucketed labels off this value rather than showing the raw number.
 
-- **Rarity as the primary value signal** — Remove the potential rating and layer depth display from the player-facing UI entirely. Rarity (from the YAML) replaces it as the main heuristic for "is this worth researching." Rarity is designer intent, not a computed ratio — a LEGENDARY item is always worth attention regardless of current layer. The only layer information the player can see is whether the current layer is the final one.
+- **Per-rarity rarity buckets** — The thresholds at which the rarity label sharpens depend on the item's true rarity. Common is always fully visible; the higher tiers share a four-step ladder ending in their own name, with a deliberate "Rare+" middle band that hides whether the item is Rare, Epic, or Legendary.
 
-- **Layer depth distribution tightened** — Common items (~60% of YAML item pool by count) are predominantly single-layer: no unlock needed, identity is resolved on arrival. Uncommon adds one unlock step; Rare two; Epic three; Legendary four. This means the unlock decision is structurally tied to rarity, not to a potential calculation the player has to run.
+- **Condition buckets decoupled from rarity** — Condition reads use their own threshold ladder so the player cannot infer rarity from how easy condition was to read. The same inspection value feeds both ladders through different functions.
 
-- **Veiled items show per-item layer 0 data** — A veiled item in the lot now shows its layer 0 `display_name` and `base_value` rather than category information. The category display is removed from veiled items entirely. The `AUTO` context on `LayerUnlockAction` is removed; the reveal phase advances layer 0 → 1 unconditionally on `is_veiled()` without going through `can_advance()`.
+- **Veiled state simplified** — Veil remains the base layer, but the automatic unlock context that promoted veiled items on arrival is removed. The reveal phase advances veiled items unconditionally. In the lot, a veiled item shows its base-layer name and base value rather than a category label.
 
-- **Per-lot inspection replaces per-item** — The inspection phase operates on the lot as a whole, not on individual items. Each action randomly targets an unveiled item in the lot. Actions: Check Condition (raises `condition_accuracy` on a random item), Check Rarity (raises `rarity_accuracy`), Try to Peek (partially reveals a partial-veil item), X-Ray Peek (reveals a full-veil item, requires perk). Category knowledge points are awarded based on whichever item is hit.
+- **UI strip** — Potential rating and numeric layer depth are removed from rows, cards, and tooltips. Rarity bucket becomes the main value signal; the only structural layer information surfaced is whether the current layer is the final one.
 
-- **Research hub replaces Storage action popup + Market Research** — The home hub gains a Research sub-screen alongside Storage. Items with unlocked layers remaining can be slotted into research (4 active slots, 8 queued). Each day-advance tick applies effects to all active slots based on a player-set priority: condition repair, condition accuracy, rarity accuracy, or layer unlock attempt. Market Research as a separate action is removed; its price-range-narrowing effect becomes one output of the research priority system. The old `ActionContext.AUTO` / `HOME` split and `MARKET_RESEARCH` action type are removed.
+- **Per-lot inspection** — Inspection acts on the lot rather than per-card. Each action randomly targets one unveiled item and either raises its inspection value or attempts to lift the veil. The X-Ray variant requires a perk and resolves a fully veiled item in one shot.
+
+- **Research hub** — A new sub-screen alongside Storage holds active and queued research slots. Each day-tick applies effects to the active slots based on a player-set priority across study, repair, and unlock attempt. Market Research as a standalone action is gone; its price-range narrowing becomes a study side-effect.
+
+- **Layer depth tied to rarity** — Common items are predominantly single-layer and resolve on arrival. Each rarity step adds one unlock layer, so the unlock decision is structurally bound to rarity rather than read off a potential calculation.
+
+Open question: the inspection-value delta per action is provisionally uniform, but the rarity ladder tops out at 4.0, so a Legendary takes eight inspections to fully resolve at the current rate. Whether that pacing holds, or whether delta needs to scale with rarity, won't be visible until per-lot inspection is wired up and a few real lots have been played.
 
 ---
 
