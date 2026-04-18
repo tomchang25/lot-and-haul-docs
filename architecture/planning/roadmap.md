@@ -137,8 +137,6 @@ The current system exposes too much structured information too cheaply. Players 
 
 - **Layer depth tied to rarity** — Common items are predominantly single-layer and resolve on arrival. Each rarity step adds one unlock layer, so the unlock decision is structurally bound to rarity rather than read off a potential calculation.
 
-Open question: the inspection-value delta per action is provisionally uniform, but the rarity ladder tops out at 4.0, so a Legendary takes eight inspections to fully resolve at the current rate. Whether that pacing holds, or whether delta needs to scale with rarity, won't be visible until per-lot inspection is wired up and a few real lots have been played.
-
 ---
 
 **Acquisition cost tracking on ItemEntry**
