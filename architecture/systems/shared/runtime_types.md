@@ -16,7 +16,7 @@ var lot_entry: LotEntry                  # null until set_lot() is called
 var lot_items: Array[ItemEntry]          # computed: lot_entry.item_entries or []
 var won_items: Array[ItemEntry]          # accumulates across all won lots this visit
 var cargo_items: Array[ItemEntry]        # subset chosen in cargo scene
-var trailer_items: Array[ItemEntry]     # items placed in extra slots
+var trailer_items: Array[ItemEntry]      # items placed in extra slots
 var last_lot_won_items: Array[ItemEntry] # latest lot only; used by reveal_scene
 
 var onsite_proceeds: int                 # cash from on-site sales in cargo scene
@@ -104,6 +104,13 @@ For each item: NPC starts at `entry.layer_index` and advances one layer at a tim
 Each additional step has probability `npc_layer_sight_chance ^ depth`. `npc_estimate` is the
 sum of `base_value` at the NPC's resolved layer per item.
 
+### Item draw
+
+`_draw_item(data)` picks a rarity by `rarity_weights`, then either picks a super-category via
+`super_category_weights` (fallback to `category_weights` when empty) and expands it through
+`SuperCategoryRegistry.get_categories_for_super()`, then picks a category uniformly. Re-tries up
+to `MAX_ATTEMPTS` if the combined `ItemRegistry.get_items(rarity, category_id)` pool is empty.
+
 ---
 
 ## ItemEntry (`game/shared/item_entry/item_entry.gd`)
@@ -116,12 +123,29 @@ Runtime state for one item within a run.
 var item_data: ItemData
 var layer_index: int               # 0 = base/veiled; 1+ = depth of identity reached
 var condition: float               # 0.0–1.0; rolled at create()
-var potential_inspect_level: int   # 0–2; incremented by Inspect Potential action
-var condition_inspect_level: int   # 0–2; incremented by Inspect Condition action
+var inspection_level: float        # unified inspection progress; feeds condition + rarity buckets
+var center_offset: float           # rolled once in [-0.5, 0.5]; biases range midpoint away from true price
+var unlock_progress: float         # accumulated effort toward the current layer's unlock action
 var id: int                        # -1 until registered in SaveManager; then immutable
-var knowledge_min: Array[float]    # per-layer price multiplier lower bound
-var knowledge_max: Array[float]    # per-layer price multiplier upper bound
 ```
+
+### Constants (all on `ItemEntry`, shared by every item)
+
+```gdscript
+const CONDITION_THRESHOLDS: Array[float] = [0.0, 1.0, 2.0]
+const RARITY_NAMES: Array[String] = ["Common", "Uncommon", "Rare", "Epic", "Legendary"]
+const RARITY_THRESHOLDS: Dictionary       # per-rarity inspection_level ladder
+const MAX_SPREADS: Dictionary             # per-rarity price-range width ceiling (0.0–2.0)
+const INSPECTION_BASE: float = 0.75       # head-start for rank 0
+const INSPECTION_PER_RANK: float = 0.25   # head-start gain per super-category rank
+const STUDY_BASE_DELTA: float = 0.25
+const REPAIR_BASE: float = 0.15
+const REPAIR_POWER: float = 0.5
+const REPAIR_MIN_STEP: float = 0.02
+const UNLOCK_BASE_EFFORT: float = 1.0
+```
+
+`RARITY_THRESHOLDS` and `MAX_SPREADS` are plain Dictionaries keyed by `ItemData.Rarity` — adding a rarity is one entry per table with no match-block edits.
 
 ### Core helpers
 
@@ -130,119 +154,107 @@ func active_layer() -> IdentityLayer
 func current_unlock_action() -> LayerUnlockAction   # null if at final layer
 func is_veiled() -> bool                             # layer_index == 0
 func is_at_final_layer() -> bool
+
+func get_condition_bucket() -> int                   # 0-2 via CONDITION_THRESHOLDS
+func get_rarity_bucket() -> int                      # via the rarity's thresholds table
+func is_condition_maxed() -> bool
+func is_rarity_maxed() -> bool
+func is_fully_inspected() -> bool                    # both ladders maxed
+
 func is_condition_inspectable() -> bool
-# Returns false when: veiled, condition_inspect_level >= 2,
-# or level == 1 and condition < 0.3 (too damaged to read further).
+# Returns false when veiled, condition bucket already maxed, or bucket 1 with condition < 0.3.
 
 func unveil() -> void
-# Advances a veiled item (layer 0) to layer 1 and recalculates knowledge ranges
-# at the new layer depth. Only accepts new ranges if the total spread is tighter.
-# Shared by reveal scene, X-Ray inspect action, and any future unveil caller.
+# Advances a veiled item (layer 0) to layer 1. No knowledge-range math — the inspection-level
+# pipeline handles range convergence on its own.
+
+func reveal() -> void
+# Raises inspection_level to the current super-category rank's head-start value. Called by the
+# reveal scene after auction to baseline knowledge for the newly-seen layer.
 ```
 
-### Advancing a layer
+### Research / inspection mutators
 
 ```gdscript
-entry.layer_index += 1
-# Always check KnowledgeManager.can_advance(entry, context) before mutating.
+func apply_inspect(delta: float) -> void     # inspection action; credits INSPECT mastery
+func apply_study(speed_factor: float = 1.0) -> void  # research STUDY; credits APPRAISE
+func apply_repair(speed_factor: float = 1.0) -> void # research REPAIR; credits REPAIR
+func add_unlock_effort(speed_factor: float = 1.0) -> void # research UNLOCK progress toward difficulty
+func advance_layer() -> void                  # completes UNLOCK; resets unlock_progress; credits REVEAL
+func is_repair_complete() -> bool             # condition >= 1.0
+func is_unlock_ready() -> bool                # unlock_progress >= current layer's difficulty
 ```
 
 ### Display properties
 
 ```gdscript
-var display_name: String             # active_layer().display_name
-var level_label: String              # "???" if veiled, else "Level N"
-var potential_inspect_label: String
-var condition_inspect_label: String
-var condition_mult_label: String
-var estimated_value_min: int         # base_value × known_condition_mult × knowledge_min[layer_index]
-var estimated_value_max: int         # base_value × known_condition_mult × knowledge_max[layer_index]
-var estimated_value_label: String    # "$N" or "$N - $M"
-var potential_price_min: int
-var potential_price_max: int
-var potential_price_label: String
-var should_show_potential_price: bool # not veiled and potential_inspect_level >= 2
-var appraised_value: int             # base_value × real_condition_mult × (1 + 0.01 × super_cat_rank)
-var appraised_value_label: String
-var market_price: int                # appraised_value × MarketManager.get_category_factor()
-var market_factor_delta: float       # MarketManager.get_category_factor() - 1.0
-var condition_label: String          # raw true condition percentage, e.g. "82%"
-var condition_color: Color           # tint based on true condition; use in reveal/run_review contexts
-var condition_inspect_color: Color   # tint based on what player currently knows
-var price_color: Color               # green if known, grey if veiled
+var display_name: String             # active_layer().display_name; final-layer non-veiled gets " ·"
+var condition_label: String          # "???" at bucket 0, word at bucket 1, "%" at bucket 2
+var condition_mult_label: String     # "×?" / "~×F" / "×F" depending on bucket
+var potential_label: String          # "Veiled" or get_potential_rating()
+var estimated_value_min: int         # compute_price_range(price_config_with_estimated)[0]
+var estimated_value_max: int         # compute_price_range(price_config_with_estimated)[1]
+var estimated_value_label: String    # "$lo – $hi" with "+" suffix if not at final layer
+var market_price: int                # compute_price(price_config_with_market)
+var market_factor_delta: float       # MarketManager.get_category_factor(category_id) - 1.0
+var condition_color: Color           # grey when veiled/bucket 0, else banded by true condition
+var price_color: Color               # PRICE_COLOR when known, PRICE_UNKNOWN_COLOR when veiled
 ```
 
-**potential_inspect_label levels:**
+**Rarity bucket display (`get_potential_rating()`):**
 
-| Level          | Shown                                                            |
-| -------------- | ---------------------------------------------------------------- |
-| 0 (veiled)     | `"Veiled"`                                                       |
-| 0 (not veiled) | `"? / ?"`                                                        |
-| 1 or 2         | `"Lv N / M  [rating]"` — current/max layer index + upside rating |
+- Non-final bucket → `"<Rarity>+"` (e.g. `"Rare+"` — covers Rare, Epic, or Legendary).
+- Final bucket → the bare rarity name (e.g. `"Legendary"`).
 
-**condition_inspect_label levels:**
+**Known condition multiplier** (`get_known_condition_multiplier()`):
 
-| Level | Shown                                            |
-| ----- | ------------------------------------------------ |
-| 0     | `"???"`                                          |
-| 1     | `"Poor"` (condition < 0.3) or `"Common"` (≥ 0.3) |
-| 2     | `"Poor"` / `"Fair"` / `"Good"` / `"Excellent"`   |
-
-**Upside rating (`get_potential_rating()`):**
-
-Computed from `best_reachable_layer.base_value / active_layer().base_value`:
-
-| Ratio                  | Rating                   |
-| ---------------------- | ------------------------ |
-| Already at final layer | `"Maxed"`                |
-| ≥ 4.0                  | `"Potentially Valuable"` |
-| ≥ 1.5                  | `"Some Upside"`          |
-| else                   | `"Probably Junk"`        |
-
-### Context-aware display helpers
-
-```gdscript
-func condition_label_for(ctx: ItemViewContext) -> String
-func condition_color_for(ctx: ItemViewContext) -> Color
-func condition_mult_label_for(ctx: ItemViewContext) -> String
-func potential_label_for(ctx: ItemViewContext) -> String
-func should_show_potential_price_for(ctx: ItemViewContext) -> bool
-func price_label_for(ctx: ItemViewContext) -> String
-func price_value_for(ctx: ItemViewContext) -> int
-```
-
-UI components call only these — never branch on stage directly.
+- Bucket 0 → `1.0` (neutral).
+- Bucket 1 → band midpoint (0.5 / 1.0 / 1.5 / 3.0) depending on true condition.
+- Bucket 2 → exact true multiplier via `get_condition_multiplier()`.
 
 ### Condition multiplier
 
 ```gdscript
 func get_condition_multiplier() -> float
 # True multiplier: condition <= 0.6 → remap(0.5–1.0); <= 0.8 → remap(1.0–2.0); else remap(2.0–4.0)
-
-func get_known_condition_multiplier() -> float
-# Player-visible band midpoint based on condition_inspect_level.
-# level 0 → 1.0 (neutral); level 1 → 0.5 or 1.0; level 2 → precise band midpoint
 ```
 
 ### Unified price pipeline
 
 ```gdscript
 func compute_price(config: PriceConfig) -> int
-# Reads active_layer().base_value, then conditionally folds in condition,
-# knowledge, and market factors per PriceConfig flags, and finally scales by
-# config.multiplier. Used by appraised_value, market_price, and SpecialOrder
-# payouts — no duplicated math across callers.
+# Reads active_layer().base_value, then conditionally folds in condition (true or "known"
+# depending on config.use_known_condition), knowledge rank, and market factors per PriceConfig
+# flags, and finally scales by config.multiplier.
+
+func compute_price_range(config: PriceConfig) -> Array[int]
+# Calls compute_price(config) as the midpoint, then applies a spread derived from inspection_level,
+# center_offset, and the rarity's max_spread. Returns [min, max], both floored at 1 so the UI
+# never shows $0 or negatives.
 ```
 
-`appraised_value`, `market_price`, and `SpecialOrder.compute_item_price()` all resolve through this one function with different `PriceConfig` presets.
+`estimated_value_min/max`, `market_price`, and `SpecialOrder.compute_item_price()` all resolve through this pipeline with different `PriceConfig` presets. `ItemRegistry` caches four preset instances so row rendering never allocates.
+
+### Context-aware price helpers
+
+```gdscript
+func price_label_for(ctx: ItemViewContext) -> String
+func price_value_for(ctx: ItemViewContext) -> int
+```
+
+Only price display dispatches on `ctx.stage`. Condition and rarity display read `inspection_level` directly on `ItemEntry` — no context branching.
 
 ### Factory
 
 ```gdscript
 static func create(data: ItemData, veil_chance: float = 0.0) -> ItemEntry
-# Rolls condition, sets layer_index (0 if veiled, 1 otherwise),
-# initialises knowledge_min/max via KnowledgeManager.get_price_range().
+# Rolls condition, center_offset in [-0.5, 0.5], sets layer_index (0 if veiled, 1 otherwise),
+# and sets inspection_level to the super-category rank's head-start value.
 ```
+
+### Serialization
+
+`to_dict()` writes `item_id`, `id`, `layer_index`, `condition`, `inspection_level`, `center_offset`, `unlock_progress`. `from_dict(d)` reads those keys (resolving `item_data` through `ItemRegistry`). `_read_inspection_level(d)` migrates legacy saves with `condition_inspect_level` / `potential_inspect_level` ints (0→0.0, 1→1.0, 2→4.0). Saves lacking `center_offset` get a fresh random roll on load so old items behave like new ones.
 
 ---
 
@@ -257,15 +269,43 @@ extends RefCounted
 var condition: bool = false
 var knowledge: bool = false
 var market: bool = false
-var multiplier: float = 1.0      # uniform scalar applied after all factor terms
+var use_known_condition: bool = false   # when true + condition=true, uses bucket-inferred mult
+var multiplier: float = 1.0             # uniform scalar applied after all factor terms
 
 static func plain() -> PriceConfig
 static func with_condition() -> PriceConfig
-static func with_appraisal() -> PriceConfig     # condition + knowledge
-static func with_market() -> PriceConfig        # condition + knowledge + market
+static func with_estimated() -> PriceConfig     # condition (known) + knowledge
+static func with_market() -> PriceConfig        # condition (true) + knowledge + market
 ```
 
-`ItemRegistry` caches one instance of each preset (`price_config_plain`, `price_config_with_condition`, `price_config_with_appraisal`, `price_config_with_market`) at startup so row rendering never allocates. `SpecialOrder` builds and caches its own `PriceConfig` from its per-order flags plus its rolled buff (see `../meta/special_orders.md`).
+`ItemRegistry` caches one instance of each preset (`price_config_plain`, `price_config_with_condition`, `price_config_with_estimated`, `price_config_with_market`) at startup. `SpecialOrder` builds and caches its own `PriceConfig` from its per-order flags plus its rolled buff (see `../meta/special_orders.md`).
+
+---
+
+## ResearchSlot (`game/shared/research_slot.gd`)
+
+Runtime value object for one slot in the storage research panel. Persisted via `SaveManager.research_slots` as plain Dictionaries.
+
+```gdscript
+class_name ResearchSlot
+extends RefCounted
+
+enum SlotAction { STUDY, REPAIR, UNLOCK }
+
+var item_id: int = -1          # -1 = empty slot
+var action: SlotAction = SlotAction.STUDY
+var completed: bool = false     # set by day-tick when the slot finishes; persisted so
+                                # UNLOCK's advance-and-reset behaviour doesn't lose the flag
+
+func is_empty() -> bool
+static func create(a: SlotAction, id: int) -> ResearchSlot
+static func action_to_string(a: SlotAction) -> String
+static func action_from_string(s: String) -> SlotAction
+func to_dict() -> Dictionary
+static func from_dict(d: Dictionary) -> ResearchSlot
+```
+
+Replaces the old `ActiveActionEntry` class. The day-tick drives each slot's mutation via `ItemEntry.apply_study()` / `apply_repair()` / `add_unlock_effort()` in `SaveManager._tick_research_slots()`.
 
 ---
 
@@ -331,43 +371,21 @@ static func from_dict(d: Dictionary) -> OrderSlot
 
 ---
 
-## ActiveActionEntry (`game/shared/active_action_entry.gd`)
-
-Runtime representation of one queued home action.
-
-```gdscript
-enum ActionType { MARKET_RESEARCH, UNLOCK }
-
-var action_type: ActionType
-var item_id: int        # matches ItemEntry.id of the target item
-var days_remaining: int
-
-static func create(type: ActionType, id: int, days: int) -> ActiveActionEntry
-func to_dict() -> Dictionary
-static func from_dict(d: Dictionary) -> ActiveActionEntry
-```
-
-Serialised in `SaveManager.active_actions` as plain Dictionaries:
-
-```json
-{ "action_type": "market_research", "item_id": 4, "days_remaining": 2 }
-```
-
----
-
 ## DaySummary (`game/shared/day_summary/day_summary.gd`)
 
 Value object returned by `SaveManager.advance_days()`. Read by `DaySummaryScene`.
 
 Fields: `start_day`, `end_day`, `days_elapsed`, `onsite_proceeds`, `paid_price`,
 `entry_fee`, `fuel_cost`, `cargo_count`, `living_cost`, `completed_actions`,
-`net_change`, `has_run_data()`.
+computed `net_change`, and `has_run_data()`. `completed_actions` is filled from research-slot
+completions during `_tick_research_slots` with `{ name, effect, action }` entries.
 
 ---
 
 ## DaySummaryScene (`game/meta/day_summary/day_summary_scene.gd`)
 
-Standalone scene displaying day-advancement results (economics, actions). Both the hub
+Standalone scene displaying day-advancement results. Groups trip expenses separately from the
+daily group and shows a cargo-count line when the run actually brought items back. Both the hub
 day-pass flow and the run-review flow navigate here via `GameManager.go_to_day_summary(summary)`.
 Continue button returns to hub via `GameManager.go_to_hub()`.
 
@@ -379,14 +397,19 @@ Continue button returns to hub via `GameManager.go_to_hub()`.
 - [x] `LotEntry` — lot-level rolled state; `get_rolled_price()` / `get_opening_bid()` derived from `npc_estimate`
 - [x] `demand_factor` replaced with `price_variance` — pure per-run noise, no demand semantics
 - [x] `price_floor_factor` / `price_ceiling_factor` added to `LotData`; `get_rolled_price()` extracted from auction scene
-- [x] `ItemEntry` — full layer / inspect / condition / knowledge API; all display logic centralised; field renames: `sell_price` → `appraised_value`, `current_price_*` → `estimated_value_*`; added `market_price`, `market_factor_delta`
-- [x] `ItemEntry.unveil()` — shared unveil path for reveal scene, X-Ray action, and future callers
 - [x] `RunRecord.trailer_items` field added for extra-slot items
-- [x] `ActiveActionEntry` with `to_dict()` / `from_dict()`; stored as plain Dicts in SaveManager
-- [x] `DaySummaryScene` — standalone scene replacing old `DaySummaryPanel` + `DayPassPopup`
-- [x] `PriceConfig` value object + `ItemEntry.compute_price()` unified pipeline shared by appraised / market / special order prices; `ItemRegistry` preset cache
+- [x] `RunRecord.actions_remaining` resets each lot from `LotData.action_quota` for per-lot inspection
+- [x] `ItemEntry` — full layer / inspection / condition / knowledge API; display logic centralised; unified `inspection_level` replaces separate `condition_inspect_level` / `potential_inspect_level`
+- [x] Single `center_offset` replaces per-layer `knowledge_min/max` arrays; price range narrows with `inspection_level`
+- [x] `ItemEntry.unveil()` — shared unveil path for reveal scene, Peek / X-Ray action, and future callers
+- [x] `ItemEntry.reveal()` — post-auction inspection floor based on super-category rank
+- [x] `ItemEntry` research mutators (`apply_study` / `apply_repair` / `add_unlock_effort` / `advance_layer`) plus named constants (`STUDY_BASE_DELTA`, `REPAIR_BASE`, `REPAIR_POWER`, `REPAIR_MIN_STEP`, `UNLOCK_BASE_EFFORT`)
+- [x] `ResearchSlot` value object replaces `ActiveActionEntry`; `SaveManager.research_slots` persisted as plain dicts
+- [x] `DaySummaryScene` — standalone scene replacing old `DaySummaryPanel` + `DayPassPopup`; `cargo_count` + regrouped layout
+- [x] `PriceConfig` value object + `ItemEntry.compute_price()` unified pipeline shared by estimated / market / special order prices; `ItemRegistry` preset cache (`plain`, `with_condition`, `with_estimated`, `with_market`)
+- [x] `compute_price_range(config) -> Array[int]` — inspection-gated range convergence driven by `inspection_level`, `center_offset`, `MAX_SPREADS`
 - [x] `SpecialOrder` runtime type with `Eligibility` enum, `check_eligibility()` (cross-slot accounting), `compute_item_price()`, and `to_dict()` / `from_dict()`
-- [x] `OrderSlot` runtime type with `accepts()`, per-slot `check_eligibility()`, and `to_dict()` / `from_dict()`
+- [x] `OrderSlot` runtime type with `accepts()`, per-slot `check_eligibility()` returning `{ eligibility, matches }`, `create(pool_entry)` factory, and `to_dict()` / `from_dict()`
 
 ## Soon
 
@@ -398,4 +421,4 @@ _None._
 
 ## Later
 
-- [ ] `ActiveActionEntry.ActionType.TRAINING` — training queues through `advance_days` chokepoint
+_None._

@@ -117,6 +117,8 @@ enum Phase {
 
 **Cancel** — right click while holding → item returns to its origin position, return to `IDLE`.
 
+**Scene footer** — `ResetButton` and `ContinueButton` are absolute-anchored children of the scene root (bottom-left and bottom-right respectively) rather than inline in a `Footer` VBox row. This keeps the action buttons on a separate layer from the content, so a tall cargo grid can't push them below the visible viewport.
+
 **Rotate** — `Q` rotates held item 90° counter-clockwise; `E` rotates 90° clockwise. Rotation transforms the `get_cells()` output during placement preview and on confirm. Rotation is not persisted on `ItemEntry` or `CategoryData`, but the scene remembers each item's last rotation in `_item_rotations` for the current session: the value is written back when an item is placed and restored when the same item is lifted again. `_item_rotations` is cleared on full reset.
 
 ### Placement Rules
@@ -172,6 +174,7 @@ Trailer slots are meant to be the "escape valve" for heavy oddball wins — cons
 - [x] `ItemRow` and `ItemRowTooltip` show Weight and Grid columns in cargo context
 - [x] `CarData.trailer_damage_chance/ratio_min/ratio_max` — trailer items can be damaged on arrival, revealed in run review
 - [x] Extra-slot items written to `RunManager.run_record.trailer_items` on confirm
+- [x] Scene footer refactor — `ResetButton` / `ContinueButton` absolute-anchored at the scene root so a tall cargo grid never pushes them offscreen; `RootVBox` carries a bottom offset so content can't overlap the floating buttons
 
 ## Soon
 
