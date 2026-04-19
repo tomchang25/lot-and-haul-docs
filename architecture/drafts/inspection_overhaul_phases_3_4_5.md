@@ -1,110 +1,210 @@
-# Inspection overhaul — phases 3, 4, 5
+# Inspection overhaul — phases 3, 4, 5 (revised)
 
-These three notes record the work still ahead after the data-spine refactor
-(phase 1) and the veiled / UI strip pass (phase 2). They're more concrete than
-a pure design note — concrete enough to translate directly into an agent prompt
-when each phase comes up — but stop short of acceptance criteria. The decided
-things are stated; the unknowns are flagged at the bottom of each note.
-
----
-
-## Phase 3
-
-**Per-lot inspection**
-
-The current inspection phase treats each card as an independent target. The
-player picks one, opens a popup, and spends stamina filling in that specific
-item's blanks. The action shape mirrors the storage list: precise, granular,
-deterministic. Combined with the new bucketed display this reads too clean —
-the player is no longer judging under uncertainty, just deciding which boxes
-to tick first.
-
-The fix is to make the inspection target itself uncertain. Actions operate on
-the lot as a whole; each one randomly hits one unveiled item.
-
-- **Action set** — Three actions replace the current condition / potential /
-  xray trio. Inspect raises the hit item's inspection level by the standard
-  delta. Try to Peek partially reveals a partial-veil item. X-Ray Peek fully
-  reveals a full-veil item and stays perk-gated. Stamina costs and the per-lot
-  action quota carry over from the existing inspection design.
-- **Random targeting** — Each action picks uniformly from the unveiled items
-  in the lot. The player has no way to direct effort at a specific card.
-- **Knowledge accounting** — Category points still flow per action, but they
-  credit whichever item was actually hit, not a player-selected target.
-- **Lot-level UI** — The per-card popup is gone. Buttons sit at the lot level;
-  each press triggers a brief animation on whichever card was hit so the
-  player can follow what happened.
-
-Open question: at a uniform inspection-level delta, a Legendary needs eight
-Inspect actions to resolve to its true rarity. Whether that reads as earned
-reward or tedious grind will only show up after a few real lots have been
-played. The delta and the rarity threshold ladder are independent knobs;
-either or both can move.
+This revision replaces the original three-phase plan. It records what shipped,
+what changed during implementation, and what remains. Each phase section states
+its current status up front so the next agent prompt can start from the right
+place.
 
 ---
 
-## Phase 4
+## Phase 3 — Per-lot inspection
 
-**Research hub**
+**Status: COMPLETE**
 
-Storage decisions are currently driven through a per-item popup — pick an item,
-choose Unlock or Market Research, the action lands on a global slot queue and
-resolves on the day-tick. Two problems: the slot queue is a flat list of
-unrelated jobs with no shape, and Market Research as a standalone verb
-duplicates effort that belongs inside a broader research model.
+Shipped via four implementation prompts executed in sequence:
 
-The home hub gains a Research sub-screen alongside Storage. Items become
-research subjects rather than action targets, and the day-tick drives all
-progress through a single dispatch.
+1. `phase3_per_lot_inspection.md` — core lot-level refactor.
+2. `item_entry_refactor_prompt.md` — data-driven rarity tables,
+   `compute_price_range` return type, price floor, inspection-level formula
+   extraction.
+3. `estimated_value_consolidation.md` — merged appraised/estimated value into
+   a single inspection-gated range, removed `knowledge_min/max` arrays,
+   removed Market Research as a standalone action, killed
+   `APPRAISED_VALUE` column.
+4. `plan-cleanup-knowledge-action-enum.md` — removed `POTENTIAL_INSPECT`,
+   renamed `CONDITION_INSPECT` → `INSPECT`, pinned explicit int values on
+   the enum.
 
-- **Slot model** — Four active slots and eight queued slots. Items with
-  unlocked layers remaining can be slotted in; items at their final layer
-  cannot. Active slots consume daily research effort; queued slots wait their
-  turn.
-- **Priority** — Each active slot carries a player-set priority. Study raises
-  inspection level and narrows the price range. Repair raises condition.
-  Unlock attempt advances the layer chain when the gate clears. Daily effort
-  applies according to the chosen priority.
-- **Market Research absorbed** — Market Research disappears as a separate
-  action. Its price-range narrowing becomes a Study side-effect, paid out per
-  day rather than as a single completion event.
-- **Storage popup gone** — The action popup on the storage scene is removed.
-  Storage becomes a read-only viewer; the verb surface lives in Research.
+### What landed
 
-Open question: how generous Study's per-day price-range narrowing should be
-relative to the old Market Research completion payout. The two have different
-shapes — drip vs. lump — and the calibration that makes neither feel strictly
-worse than the other needs a play pass.
+- **Lot-level action bar.** `LotActionBar` with two buttons (Inspect / Try to
+  Peek) replaces the per-card `ActionPopup`. Cards are no longer clickable for
+  inspection.
+- **Random targeting.** Inspect picks 1–`MAX_INSPECT_HITS` (3) random unveiled
+  non-fully-inspected items. Try to Peek rolls each veiled item individually
+  (50 % base, 100 % with `xray_inspect` perk).
+- **Inspection-gated price range.** Storage and run-review show a min–max range
+  (e.g. "$200 – $600") driven by `inspection_level`, `center_offset`, and
+  per-rarity `MAX_SPREADS`. Range converges to the true price at max
+  inspection. Non-final-layer items append "+".
+- **Data-driven rarity tables.** `RARITY_THRESHOLDS` and `MAX_SPREADS` are
+  top-level const Dictionaries — no match blocks. Adding a rarity is one entry
+  per table.
+- **Inspection-level head start.** `inspection_level` at creation is a function
+  of super-category rank (`INSPECTION_BASE + rank * INSPECTION_PER_RANK`),
+  shared between `create()` and `reveal()`.
+- **Market Research removed.** The button, confirmation dialog, action type
+  enum value, and all functional paths are gone. `SaveManager` load silently
+  drops legacy `market_research` entries.
+- **KnowledgeAction cleaned up.** Enum is now `INSPECT=1, REVEAL=2,
+APPRAISE=3, REPAIR=4, SELL=5` with explicit int values. Zero stale
+  references.
+
+### Deferred from original Phase 3 design
+
+- **X-Ray Peek as a third button.** The original note described three actions
+  (Inspect / Try to Peek / X-Ray Peek). Implementation folded X-Ray into
+  Try to Peek via the perk check. A separate button can be added later if
+  playtesting shows the distinction matters, but nothing in the codebase
+  blocks that.
+- **Delta / threshold tuning.** The open question about Legendary needing
+  eight Inspect actions still applies. Current values are playable defaults;
+  a tuning pass after several real lots is still needed.
 
 ---
 
-## Phase 5
+## Phase 4 — Research hub
 
-**Layer depth tied to rarity**
+**Status: NOT STARTED**
 
-Layer count is currently a per-item authoring decision. Common items carry the
-same 3–5 layer chains as legendaries, which means the Unlock decision is
-disconnected from rarity. The player learns to read potential ratings to
-decide what's worth researching — exactly the structured-information reading
-the overhaul exists to remove.
+The goal is unchanged: replace the per-item action popup in Storage with a
+dedicated Research sub-screen on the home hub. Items become research subjects
+slotted into a queue; the day-tick drives all progress.
 
-Layer depth becomes a function of rarity, decided by the data schema rather
-than per item. Common items are predominantly single-layer and resolve on
-arrival; each rarity step adds one unlock to the chain.
+### Current state of the codebase
 
-- **Distribution** — Common items make up roughly 60% of the YAML pool by
-  count and are mostly single-layer. Uncommon adds one unlock, Rare adds two,
-  Epic adds three, Legendary adds four. The validator flags items outside ±1
-  of the rarity-implied depth.
-- **Content rewrite** — Existing YAML and `.tres` content is rewritten to fit
-  the new distribution. The shared-trunk and cross-chain mechanics still
-  apply where there's room, but most common items skip the trunk entirely.
-- **Validator update** — The layer-count sanity check is added. The
-  AUTO-only-on-layer-0 rule is dropped along with the AUTO unlock context
-  itself, which becomes dead enum once content is rewritten.
+- Storage scene (`storage_scene.gd/.tscn`) still uses a per-item `ActionPopup`
+  window with an "Unlock Next Layer" button.
+- `ActiveActionEntry` has a single `ActionType.UNLOCK` enum value. The
+  `MARKET_RESEARCH` value and all its paths are already removed.
+- `SaveManager.active_actions` is a flat list of dicts; `max_concurrent_actions`
+  caps the list size. Day-tick iterates the list, decrements
+  `days_remaining`, and calls `_apply_action_effect` on completion.
+- Hub scene (`hub_scene.gd/.tscn`) has buttons for Storage, Merchants,
+  Vehicle, Knowledge, Day Pass. No Research entry yet.
+- `KnowledgeAction` enum already contains `APPRAISE=3`, `REPAIR=4` — reserved
+  but not yet wired to any game logic.
 
-Open question: removing layer chains from common items also removes their
-participation in cross-chain shared mid-layers. Whether the confusion mechanic
-still pulls its weight with only Uncommon-and-up items participating, or
-whether the higher rarities need more shared trunks to compensate, won't be
-clear until items are rewritten and inspected as a set.
+### What needs to happen
+
+- **Research sub-screen.** New scene registered in `SceneRegistry`, reachable
+  from the hub alongside Storage. Displays active slots, queued slots, and
+  an item picker.
+- **Slot model.** Four active slots, eight queued slots. Only items with
+  unlocked layers remaining can be slotted. Items at their final layer cannot.
+  When an active slot completes or is vacated, the next queued item promotes
+  automatically.
+- **Priority system.** Each active slot carries a player-set priority:
+  - **Study** — raises `inspection_level` per day-tick and narrows the price
+    range. This absorbs what Market Research used to do, paid out as a daily
+    drip instead of a single completion event.
+  - **Repair** — raises `condition` per day-tick. Feeds into the
+    `KnowledgeAction.REPAIR` mastery point channel.
+  - **Unlock** — advances the layer chain when the gate clears. Identical to
+    the current `UNLOCK` action type but driven through the slot model
+    instead of the flat action list.
+- **Daily effort dispatch.** `SaveManager._tick_actions` (or its replacement)
+  iterates active slots in priority order, applies the chosen effect, credits
+  mastery points via the appropriate `KnowledgeAction`, and handles
+  completion / promotion.
+- **Storage becomes read-only.** The `ActionPopup` in storage is removed.
+  Storage is a viewer; all verbs live in Research.
+- **ActiveActionEntry refactor.** The flat `active_actions` list is replaced
+  (or wrapped) by the slot/queue model. `ActionType` gains `STUDY` and
+  `REPAIR` alongside the existing `UNLOCK`. Serialization must migrate
+  old saves that have in-flight `UNLOCK` entries.
+
+### Open questions (carried forward)
+
+- Study's per-day price-range narrowing rate vs. the old Market Research
+  lump payout. The two have different shapes (drip vs. lump) and the
+  calibration that makes neither feel strictly worse needs a play pass.
+- Whether Repair should have a ceiling (e.g. 0.9) or can restore to 1.0.
+- Whether the queue should auto-promote on completion or require a manual
+  confirm (to avoid accidentally starting expensive unlocks).
+
+---
+
+## Phase 5 — Layer depth tied to rarity
+
+**Status: NOT STARTED — blocked on Phase 4 for full benefit, but validator
+and content work can begin independently.**
+
+Layer depth becomes a function of rarity so the Unlock decision correlates
+with value. Common items resolve on arrival; each rarity step adds one
+unlock to the chain.
+
+### Current state of the codebase
+
+- YAML generation prompt already suggests rarity-correlated depths (Common
+  2–3 layers, Uncommon 3, Rare 3–4, Epic 4–5, Legendary 5), but these are
+  authoring guidelines, not enforced constraints.
+- The validator (`item.py`) checks structural rules (AUTO on layer[0], null
+  on final layer, base_value monotonicity) but has no rarity-vs-depth check.
+- `LayerUnlockAction.ActionContext.AUTO` is marked `DEPRECATED` in the source
+  with a comment that it's scheduled for removal once content is rewritten.
+  The enum value still exists; existing `.tres` resources reference it.
+- All current items — including Commons — carry 2–5 layer chains with shared
+  trunks and cross-chain mid-layers.
+
+### Target distribution
+
+| Rarity    | Target depth | Unlocks to final       | Cross-chain participation |
+| --------- | ------------ | ---------------------- | ------------------------- |
+| Common    | 1–2 layers   | 0 (resolve on arrival) | Rarely; most skip trunk   |
+| Uncommon  | 2–3 layers   | 1 unlock               | Yes — shared trunk        |
+| Rare      | 3–4 layers   | 2 unlocks              | Yes                       |
+| Epic      | 4–5 layers   | 3 unlocks              | Yes                       |
+| Legendary | 5–6 layers   | 4 unlocks              | Yes — deepest trunks      |
+
+The validator flags items outside ±1 of the rarity-implied depth.
+
+### What needs to happen
+
+- **Validator update.** Add a rarity-depth sanity check to `item.py`. Flag
+  items whose `len(layer_ids)` falls outside the rarity band. Keep ±1
+  tolerance so edge cases don't block the pipeline.
+- **AUTO removal.** Drop `ActionContext.AUTO` from the enum. Update
+  `yaml_to_tres.py` to stop emitting it. Update the YAML generation prompt
+  to remove the `context: 0` rule — layer[0] simply has no `unlock_action`
+  (or the concept is handled differently; the reveal flow already ignores
+  AUTO).
+- **Content rewrite.** All existing YAML and `.tres` content is rewritten to
+  match the new distribution. Common items become mostly single-layer (no
+  unlock chain). Shared trunks and cross-chain mechanics remain for
+  Uncommon-and-up where there's room.
+- **YAML generation prompt update.** The rarity-vs-depth table in the prompt
+  is tightened to match the new distribution. The validation checklist gains
+  a rarity-depth check.
+
+### Open questions (carried forward)
+
+- Removing layer chains from Common items also removes their participation
+  in cross-chain shared mid-layers. Whether the confusion mechanic still
+  works with only Uncommon+ items, or whether higher rarities need more
+  shared trunks to compensate, won't be clear until items are rewritten and
+  inspected as a set.
+- Whether single-layer Commons should still roll `center_offset` and show a
+  price range (since they resolve to final identity immediately), or whether
+  their price should just be exact from the start.
+
+---
+
+## Dependency map
+
+```
+Phase 3  ──  DONE
+  │
+  ├─► Phase 4 (Research hub)
+  │     └─► Phase 5 benefits fully (Unlock decision matters
+  │         because Research is the verb surface)
+  │
+  └─► Phase 5 (Layer depth)
+        ├── Validator + content rewrite can start now
+        └── Full gameplay benefit requires Phase 4
+```
+
+Phase 4 is the critical path. Phase 5's validator and content work can
+proceed in parallel but the player-facing payoff — "Common items don't
+need research, Legendaries need deep investment" — only lands once the
+Research hub exists.
