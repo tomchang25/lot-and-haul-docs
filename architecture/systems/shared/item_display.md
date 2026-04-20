@@ -70,12 +70,12 @@ enum Column {
 
 Each price column renders from its own getter on `ItemEntry`:
 
-| Column            | Label text                                   | Numeric value for sort                  |
-| ----------------- | -------------------------------------------- | --------------------------------------- |
-| `ESTIMATED_VALUE` | `estimated_value_label`                      | `estimated_value_sort_value()`          |
-| `BASE_VALUE`      | `base_value_label_text()`                    | `base_value_sort_value()`               |
-| `MERCHANT_OFFER`  | `merchant_offer_label(ctx.merchant)`         | `merchant_offer_value(ctx.merchant)`    |
-| `SPECIAL_ORDER`   | `special_order_label(ctx.order)`             | `special_order_value(ctx.order)`        |
+| Column            | Label text                           | Numeric value for sort               |
+| ----------------- | ------------------------------------ | ------------------------------------ |
+| `ESTIMATED_VALUE` | `estimated_value_label`              | `estimated_value_sort_value()`       |
+| `BASE_VALUE`      | `base_value_label_text()`            | `base_value_sort_value()`            |
+| `MERCHANT_OFFER`  | `merchant_offer_label(ctx.merchant)` | `merchant_offer_value(ctx.merchant)` |
+| `SPECIAL_ORDER`   | `special_order_label(ctx.order)`     | `special_order_value(ctx.order)`     |
 
 Because every price column is independent, transaction views compose them freely. Non-transaction stages pick a single appropriate price column.
 
@@ -118,13 +118,13 @@ Each label's visibility is gated on whether its `Column` is in the `columns` arr
 
 ### Scene column compositions (current)
 
-| Scene                  | Columns (in order)                                                                                                     |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Storage                | `NAME, CONDITION, ESTIMATED_VALUE, RARITY, RESEARCH_STATUS`                                                             |
-| Run review             | `NAME, CONDITION, ESTIMATED_VALUE, RARITY`                                                                              |
-| List review (pre-auction) | `NAME, CONDITION, ESTIMATED_VALUE, RARITY`                                                                           |
-| Merchant shop          | `NAME, CONDITION, ESTIMATED_VALUE, MERCHANT_OFFER, MARKET_FACTOR, RARITY`                                               |
-| Fulfillment panel      | composed per-order around `NAME, CONDITION, ESTIMATED_VALUE, SPECIAL_ORDER`                                             |
+| Scene                     | Columns (in order)                                                          |
+| ------------------------- | --------------------------------------------------------------------------- |
+| Storage                   | `NAME, CONDITION, ESTIMATED_VALUE, RARITY, RESEARCH_STATUS`                 |
+| Run review                | `NAME, CONDITION, ESTIMATED_VALUE, RARITY`                                  |
+| List review (pre-auction) | `NAME, CONDITION, ESTIMATED_VALUE, RARITY`                                  |
+| Merchant shop             | `NAME, CONDITION, ESTIMATED_VALUE, MERCHANT_OFFER, MARKET_FACTOR, RARITY`   |
+| Fulfillment panel         | composed per-order around `NAME, CONDITION, ESTIMATED_VALUE, SPECIAL_ORDER` |
 
 ---
 

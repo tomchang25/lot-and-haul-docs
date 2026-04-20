@@ -8,28 +8,28 @@ Autoloads, save system, registries, hub navigation, and data pipeline shared acr
 
 Listed in `project.godot` load order. Dependencies between autoloads are noted per-row.
 
-| Autoload              | File                                            | Role                                                                                                                                                                                      |
-| --------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `EventBus`            | `global/autoload/event_bus.gd`                  | Cross-scene signal bus (placeholder — currently empty).                                                                                                                                   |
-| `AudioManager`        | `global/autoload/audio_manager/`                | Audio bus wrappers and event types.                                                                                                                                                       |
-| `RegistryCoordinator` | `global/autoload/registry_coordinator.gd`       | Drives `migrate()` / `validate()` across every registry that opts in via `register(self)`. Called from `GameManager._ready()` after `SaveManager.load()`.                                 |
-| `ItemRegistry`        | `global/autoload/registries/item_registry.gd`   | Loads all `ItemData` `.tres` files; owns cached `PriceConfig` presets (`price_config_plain` / `_with_condition` / `_with_estimated` / `_with_market`).                                    |
-| `RunManager`          | `global/autoload/run_manager.gd`                | Holds `run_record: RunRecord`. Null between runs.                                                                                                                                         |
-| `CarRegistry`         | `global/autoload/registries/car_registry.gd`    | Loads all `CarData` `.tres` from `data/tres/cars/`. Owns the starter-van migration in `migrate()`.                                                                                        |
-| `LocationRegistry`    | `global/autoload/registries/location_registry.gd` | Loads all `LocationData` `.tres` from `data/tres/locations/`.                                                                                                                           |
-| `CategoryRegistry`    | `global/autoload/registries/category_registry.gd` | Loads all `CategoryData` `.tres` from `data/tres/categories/`. Also owns the `category_id → super_category` helper (`get_super_category_for`) served via the direct resource reference. |
-| `SuperCategoryRegistry` | `global/autoload/registries/super_category_registry.gd` | Loads all `SuperCategoryData` `.tres` from `data/tres/super_categories/`. Builds a `super_category_id → Array[CategoryData]` index at startup. Asserts `CategoryRegistry` is loaded first. |
-| `MarketManager`       | `global/autoload/market_manager.gd`             | Daily market factors per category. Random-walks super-category means, resamples per-category factors. `advance_market(days)` called from `SaveManager.advance_days()`.                    |
-| `MerchantRegistry`    | `global/autoload/registries/merchant_registry.gd` | Loads all `MerchantData` `.tres` from `data/tres/merchants/`. Manages special orders, daily negotiation budgets. `advance_day()` called from `SaveManager.advance_days()`.              |
-| `KnowledgeManager`    | `global/autoload/knowledge_manager.gd`          | Three knowledge pillars: category mastery (passive), skill levels (trained), perks (granted). Layer-advance checks. See `../meta/knowledge.md` for full API.                              |
-| `SaveManager`         | `global/autoload/save_manager.gd`               | Persistent cross-run data: cash, storage, category points, skill levels, perks, research slots, market state, merchant orders.                                                            |
-| `GameManager`         | `global/autoload/game_manager/`                 | Scene transitions only. All `go_to_*()` methods. Holds `_pending_day_summary` and `_pending_merchant` for inter-scene data passing. Runs `RegistryCoordinator` migrations/validation at boot. |
+| Autoload                | File                                                    | Role                                                                                                                                                                                          |
+| ----------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `EventBus`              | `global/autoload/event_bus.gd`                          | Cross-scene signal bus (placeholder — currently empty).                                                                                                                                       |
+| `AudioManager`          | `global/autoload/audio_manager/`                        | Audio bus wrappers and event types.                                                                                                                                                           |
+| `RegistryCoordinator`   | `global/autoload/registry_coordinator.gd`               | Drives `migrate()` / `validate()` across every registry that opts in via `register(self)`. Called from `GameManager._ready()` after `SaveManager.load()`.                                     |
+| `ItemRegistry`          | `global/autoload/registries/item_registry.gd`           | Loads all `ItemData` `.tres` files; owns cached `PriceConfig` presets (`price_config_plain` / `_with_condition` / `_with_estimated` / `_with_market`).                                        |
+| `RunManager`            | `global/autoload/run_manager.gd`                        | Holds `run_record: RunRecord`. Null between runs.                                                                                                                                             |
+| `CarRegistry`           | `global/autoload/registries/car_registry.gd`            | Loads all `CarData` `.tres` from `data/tres/cars/`. Owns the starter-van migration in `migrate()`.                                                                                            |
+| `LocationRegistry`      | `global/autoload/registries/location_registry.gd`       | Loads all `LocationData` `.tres` from `data/tres/locations/`.                                                                                                                                 |
+| `CategoryRegistry`      | `global/autoload/registries/category_registry.gd`       | Loads all `CategoryData` `.tres` from `data/tres/categories/`. Also owns the `category_id → super_category` helper (`get_super_category_for`) served via the direct resource reference.       |
+| `SuperCategoryRegistry` | `global/autoload/registries/super_category_registry.gd` | Loads all `SuperCategoryData` `.tres` from `data/tres/super_categories/`. Builds a `super_category_id → Array[CategoryData]` index at startup. Asserts `CategoryRegistry` is loaded first.    |
+| `MarketManager`         | `global/autoload/market_manager.gd`                     | Daily market factors per category. Random-walks super-category means, resamples per-category factors. `advance_market(days)` called from `SaveManager.advance_days()`.                        |
+| `MerchantRegistry`      | `global/autoload/registries/merchant_registry.gd`       | Loads all `MerchantData` `.tres` from `data/tres/merchants/`. Manages special orders, daily negotiation budgets. `advance_day()` called from `SaveManager.advance_days()`.                    |
+| `KnowledgeManager`      | `global/autoload/knowledge_manager.gd`                  | Three knowledge pillars: category mastery (passive), skill levels (trained), perks (granted). Layer-advance checks. See `../meta/knowledge.md` for full API.                                  |
+| `SaveManager`           | `global/autoload/save_manager.gd`                       | Persistent cross-run data: cash, storage, category points, skill levels, perks, research slots, market state, merchant orders.                                                                |
+| `GameManager`           | `global/autoload/game_manager/`                         | Scene transitions only. All `go_to_*()` methods. Holds `_pending_day_summary` and `_pending_merchant` for inter-scene data passing. Runs `RegistryCoordinator` migrations/validation at boot. |
 
 ### Constants (accessed by `class_name`, not autoloads)
 
-| Class       | File                             | Role                                                                                                                                  |
-| ----------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `Economy`   | `global/constants/economy.gd`    | `DAILY_BASE_COST`, `LOCATION_SAMPLE_SIZE`, and other economy constants.                                                                |
+| Class       | File                             | Role                                                                                                                                                                                                                               |
+| ----------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Economy`   | `global/constants/economy.gd`    | `DAILY_BASE_COST`, `LOCATION_SAMPLE_SIZE`, and other economy constants.                                                                                                                                                            |
 | `DataPaths` | `global/constants/data_paths.gd` | Single source of truth for `res://data/tres/` directory strings: `ITEMS_DIR`, `CATEGORIES_DIR`, `SUPER_CATEGORIES_DIR`, `PERKS_DIR`, `SKILLS_DIR`, `LOCATIONS_DIR`, `LOTS_DIR`, `CARS_DIR`, `MERCHANTS_DIR`, `SPECIAL_ORDERS_DIR`. |
 
 ---
@@ -46,8 +46,8 @@ func run_validation() -> bool       # calls validate() -> bool on each; returns 
 
 Each registry that opts in defines:
 
-- `migrate()` *(optional)* — idempotent repair of save-state vs. data drift. Safe to re-run.
-- `validate() -> bool` *(optional)* — boot-time audit that the registry loaded and that every save-persisted id still resolves against it. Emits `push_error` for each problem and returns `false` on any failure.
+- `migrate()` _(optional)_ — idempotent repair of save-state vs. data drift. Safe to re-run.
+- `validate() -> bool` _(optional)_ — boot-time audit that the registry loaded and that every save-persisted id still resolves against it. Emits `push_error` for each problem and returns `false` on any failure.
 
 This structure replaced the earlier `RegistryAudit.run(scene_registry)` entry point; only the scene-wiring check (`RegistryAudit.check_scene_registry`) still lives in `RegistryAudit`.
 
@@ -111,11 +111,11 @@ func advance_days(n: int) -> DaySummary
 
 `advance_days()` calls `_tick_research_slots(days)`. For each non-empty, non-completed slot it dispatches on `ResearchSlot.SlotAction`:
 
-| Action | Effect per day-tick                                              | Completion condition            |
-| ------ | ---------------------------------------------------------------- | ------------------------------- |
-| STUDY  | `entry.apply_study(_study_speed_factor())`                       | `is_fully_inspected()`          |
-| REPAIR | `entry.apply_repair(_repair_speed_factor())`                     | `is_repair_complete()`          |
-| UNLOCK | `entry.add_unlock_effort(_unlock_speed_factor())`; advances layer when `is_unlock_ready()` | advance_layer() ran             |
+| Action | Effect per day-tick                                                                        | Completion condition   |
+| ------ | ------------------------------------------------------------------------------------------ | ---------------------- |
+| STUDY  | `entry.apply_study(_study_speed_factor())`                                                 | `is_fully_inspected()` |
+| REPAIR | `entry.apply_repair(_repair_speed_factor())`                                               | `is_repair_complete()` |
+| UNLOCK | `entry.add_unlock_effort(_unlock_speed_factor())`; advances layer when `is_unlock_ready()` | advance_layer() ran    |
 
 `_study_speed_factor()` and `_unlock_speed_factor()` both read the `appraisal` skill level and mastery rank; `_repair_speed_factor()` uses the `mechanical` skill. Completion dictionaries feed `DaySummary.completed_actions`.
 
