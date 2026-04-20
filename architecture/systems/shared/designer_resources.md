@@ -14,7 +14,7 @@ Designer-authored Resource definitions used across all blocks.
 @export var market_mean_min: float = 0.7    # lower bound for drifting mean
 @export var market_mean_max: float = 1.3    # upper bound for drifting mean
 @export var market_stddev: float = 0.02     # std dev for daily category factor resampling
-@export var market_drift_per_day: float = 0.05  # Gaussian step std dev for daily random walk
+@export var market_drift_per_week: float = 0.05  # Gaussian step std dev; fires once every 7 days
 ```
 
 `.tres` files under `data/tres/super_categories/`.
@@ -234,7 +234,7 @@ Inline sub-resource under `SpecialOrderData.slot_pool`. Each generated slot pick
 - [x] `CarData` with `grid_columns`, `grid_rows`, `extra_slot_count`, `stamina_cap`, `fuel_cost_per_day`, `max_weight`, `price`, `icon`, `stats_line()`, `trailer_damage_chance/ratio_min/ratio_max`
 - [x] `LotData.super_category_weights` — super-category roll before category roll in `LotEntry._draw_item()`
 - [x] `LotData.lot_id` field
-- [x] `SuperCategoryData` market tuning fields: `market_mean_min`, `market_mean_max`, `market_stddev`, `market_drift_per_day`
+- [x] `SuperCategoryData` market tuning fields: `market_mean_min`, `market_mean_max`, `market_stddev`, `market_drift_per_week`
 - [x] `LocationData` resource with `location_id`, `display_name`, `description`, `entry_fee`, `travel_days`, `lot_number`, `lot_pool`
 - [x] `MerchantData` resource with full negotiation tuning, special orders, pricing logic, and perk gates
 - [x] `MerchantData` auto-accept tuning — `auto_accept_threshold` / `auto_accept_p_min` for close-gap acceptance without forcing a counter round

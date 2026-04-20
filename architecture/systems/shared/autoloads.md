@@ -19,7 +19,7 @@ Listed in `project.godot` load order. Dependencies between autoloads are noted p
 | `LocationRegistry`      | `global/autoload/registries/location_registry.gd`       | Loads all `LocationData` `.tres` from `data/tres/locations/`.                                                                                                                                 |
 | `CategoryRegistry`      | `global/autoload/registries/category_registry.gd`       | Loads all `CategoryData` `.tres` from `data/tres/categories/`. Also owns the `category_id → super_category` helper (`get_super_category_for`) served via the direct resource reference.       |
 | `SuperCategoryRegistry` | `global/autoload/registries/super_category_registry.gd` | Loads all `SuperCategoryData` `.tres` from `data/tres/super_categories/`. Builds a `super_category_id → Array[CategoryData]` index at startup. Asserts `CategoryRegistry` is loaded first.    |
-| `MarketManager`         | `global/autoload/market_manager.gd`                     | Daily market factors per category. Random-walks super-category means, resamples per-category factors. `advance_market(days)` called from `SaveManager.advance_days()`.                        |
+| `MarketManager`         | `global/autoload/market_manager.gd`                     | Market factors per category. Super-category means random-walk once per week (on `day % 7 == 0`); per-category factors resample daily. `advance_market(days)` called from `SaveManager.advance_days()`.                        |
 | `MerchantRegistry`      | `global/autoload/registries/merchant_registry.gd`       | Loads all `MerchantData` `.tres` from `data/tres/merchants/`. Manages special orders, daily negotiation budgets. `advance_day()` called from `SaveManager.advance_days()`.                    |
 | `KnowledgeManager`      | `global/autoload/knowledge_manager.gd`                  | Three knowledge pillars: category mastery (passive), skill levels (trained), perks (granted). Layer-advance checks. See `../meta/knowledge.md` for full API.                                  |
 | `SaveManager`           | `global/autoload/save_manager.gd`                       | Persistent cross-run data: cash, storage, category points, skill levels, perks, research slots, market state, merchant orders.                                                                |
@@ -182,7 +182,7 @@ No database layer — the old SQLite pipeline has been removed.
 - [x] `GameManager` / `RunManager` / `SaveManager` separated; `go_to_*()` on GameManager only
 - [x] `CarRegistry` autoload — loads all `CarData` `.tres`; `get_car()` / `get_all_cars()`
 - [x] `LocationRegistry` autoload — loads all `LocationData` `.tres`; `get_location()` / `get_all_locations()`
-- [x] `MarketManager` autoload — daily market factors per category via random walk on super-category means
+- [x] `MarketManager` autoload — daily per-category market factors driven by a weekly random walk on super-category means (drift step fires on `day % 7 == 0`)
 - [x] `MerchantRegistry` autoload — loads all `MerchantData` `.tres`; manages special orders, negotiation budgets, day-advance orchestration
 - [x] `CategoryRegistry` / `SuperCategoryRegistry` autoloads — first-class category + super-category lookup and member-index; `ItemRegistry` no longer walks items for category queries
 - [x] `RegistryCoordinator` autoload — drives `migrate()` / `validate()` across every registry that opts in; replaces the earlier `RegistryAudit.run(scene_registry)` entry point for per-registry checks
