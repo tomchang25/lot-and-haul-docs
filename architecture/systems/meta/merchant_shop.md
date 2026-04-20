@@ -6,7 +6,7 @@ Top-level merchant overview lives in `merchant.md`. Special-order fulfillment is
 
 ## Goal
 
-Convert stored items into cash through a per-merchant flow that keeps the reference price (appraised value) visible alongside the merchant's offer, then resolves the trade through a negotiation that punishes greed without forcing busywork on near-agreements.
+Convert stored items into cash through a per-merchant flow that keeps the reference price (the inspection-gated estimated value) visible alongside the merchant's offer, then resolves the trade through a negotiation that punishes greed without forcing busywork on near-agreements.
 
 ## Reads
 
@@ -29,7 +29,7 @@ On back, accept (after popup), or cancel: `GameManager.go_to_merchant_hub()`.
 
 ### Merchant Shop Scene
 
-`game/meta/merchant/merchant_shop/merchant_shop_scene.gd` + `.tscn` — basket-level selling UI. Receives the selected `MerchantData` via `GameManager.consume_pending_merchant()`. Uses `ItemListPanel` with `SHOP_COLUMNS = [NAME, CONDITION, APPRAISED_VALUE, MERCHANT_OFFER, MARKET_FACTOR, POTENTIAL]` and `ItemViewContext.for_merchant_shop(merchant)` (FORCE_TRUE_VALUE, FORCE_FULL). `APPRAISED_VALUE` and `MERCHANT_OFFER` are two independent price columns so the player keeps the reference price visible alongside the merchant's current offer instead of one displacing the other. Only displays storage items where `merchant.offer_for(entry) > 0`.
+`game/meta/merchant/merchant_shop/merchant_shop_scene.gd` + `.tscn` — basket-level selling UI. Receives the selected `MerchantData` via `GameManager.consume_pending_merchant()`. Uses `ItemListPanel` with `SHOP_COLUMNS = [NAME, CONDITION, ESTIMATED_VALUE, MERCHANT_OFFER, MARKET_FACTOR, RARITY]` and `ItemViewContext.for_merchant_shop(merchant)`. `ESTIMATED_VALUE` and `MERCHANT_OFFER` are two independent price columns so the player keeps the reference price visible alongside the merchant's current offer instead of one displacing the other. Only displays storage items where `merchant.offer_for(entry) > 0`.
 
 Row selection toggles via `set_selection_state()`. Sell button opens `NegotiationDialog` with the selected basket.
 
@@ -90,7 +90,7 @@ Ceiling range indicator shows `merchant.ceiling_multiplier_min/max` applied to b
 ## Done
 
 - [x] Merchant Shop scene — basket selection via `ItemListPanel`, opens `NegotiationDialog` on sell
-- [x] Side-by-side price columns — `APPRAISED_VALUE` + `MERCHANT_OFFER` composed via independent columns so the reference price stays visible during negotiation
+- [x] Side-by-side price columns — `ESTIMATED_VALUE` + `MERCHANT_OFFER` composed via independent columns so the inspection-gated reference price stays visible during negotiation
 - [x] Negotiation Dialog — basket-level negotiation with anger/counter mechanics, ceiling mystery, lowball confirm
 - [x] Sale settlement — credit cash, remove from storage, award category points (SELL), increment negotiation count
 - [x] Negotiation auto-accept on small gaps — `auto_accept_threshold` / `auto_accept_p_min` on `MerchantData`; probabilistic acceptance when the proposal is close to the current offer instead of forcing a counter round

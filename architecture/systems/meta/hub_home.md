@@ -16,8 +16,8 @@ Be the calm between runs: the place where the player converts won cargo into cas
 
 ## Writes
 
-- `SaveManager.current_day` / `cash` / `active_actions` — via `SaveManager.advance_days()` on Day Pass
-- `SaveManager.storage_items` — mutated by Storage actions (queue research, queue unlock, sell)
+- `SaveManager.current_day` / `cash` / `research_slots` — via `SaveManager.advance_days()` on Day Pass
+- `SaveManager.storage_items` — mutated by Storage actions (assign/remove research slot)
 
 On Day Pass: `GameManager.go_to_day_summary(summary)`. On Knowledge: `GameManager.go_to_knowledge_hub()`. On Next Run: `GameManager.go_to_location_select()`. On Merchant: `GameManager.go_to_merchant_hub()` (see `merchant.md`). On Storage: `GameManager.go_to_storage()`.
 
@@ -66,10 +66,13 @@ Returning from `DaySummaryScene` via `GameManager.go_to_hub()` re-runs hub `_rea
 
 ### Storage
 
-`game/meta/storage/storage_scene.gd` + `.tscn` — player manages stored items: queue Market Research, queue Layer Unlock, sell.
+`game/meta/storage/storage_scene.gd` + `.tscn` — player manages stored items and assigns them to research slots (Study / Repair / Unlock). Storage is both the viewer and the verb surface — there is no separate Research scene.
 
-- Unlock button disabled with reason tooltip via `AdvanceCheckLabel.describe()` when `KnowledgeManager.can_advance()` returns non-OK.
-- Market Research button queues an `ActiveActionEntry`.
+- Item list uses `ItemListPanel` with `STORAGE_COLUMNS = [NAME, CONDITION, ESTIMATED_VALUE, RARITY, RESEARCH_STATUS]` and `ItemViewContext.for_storage()`. The `RESEARCH_STATUS` column shows `"S"`/`"R"`/`"U"` for the current slot action or `"✓"` when completed; empty when the item is not assigned.
+- Clicking a row opens an `ActionPopup` with Study / Repair / Unlock / Remove / Cancel. If `max_research_slots` is exhausted the popup shows `"No research slots available"` and hides the action buttons.
+- Study disables with tooltip when `is_fully_inspected()`, Repair when `is_repair_complete()`, Unlock when `is_at_final_layer()` or when `KnowledgeManager.can_advance()` returns non-OK (via `AdvanceCheckLabel.describe()`).
+- Choosing a new action writes a fresh `ResearchSlot` dict to `SaveManager.research_slots`; switching action from an in-slot item replaces the slot and resets `completed` but leaves `ItemEntry.inspection_level` / `condition` / `unlock_progress` untouched.
+- Hub Storage button text is appended with `"(N done)"` when completed research slots exist (counted via `_completed_research_count()` in `hub_scene.gd`).
 
 ### Merchant Surfaces
 
@@ -125,8 +128,10 @@ Hub only routes into the merchant hub. Per-merchant shop, negotiation, and speci
 - [x] Knowledge Hub entry scene at `game/meta/knowledge/knowledge_hub.{gd,tscn}` routing to Mastery / Skills / Perks sub-panels
 - [x] `DaySummaryScene` shared by hub day-pass and run-review flows; reads from `GameManager.consume_pending_day_summary()`, falls back to hub if empty
 - [x] `DaySummary` value object with `start_day` / `end_day` / `days_elapsed`, run fields, `cargo_count`, `living_cost`, `completed_actions`, computed `net_change`, and `has_run_data()` gate
-- [x] Storage scene with Market Research queue, Layer Unlock queue, sell
-- [x] Storage Unlock button disabled-reason tooltip via `AdvanceCheckLabel.describe()`
+- [x] Storage scene with research-slot assignment (Study / Repair / Unlock), slot removal, and per-action disabled-reason tooltips; legacy Market Research and standalone Unlock flows removed
+- [x] `Column.RESEARCH_STATUS` on the storage list shows `"S"` / `"R"` / `"U"` for the current slot action or `"✓"` on completion
+- [x] Hub Storage button badge — text becomes `"Storage (N done)"` when `N` research slots are completed, refreshed on `_refresh_display()`
+- [x] `DaySummary.cargo_count` + regrouped scene (TripExpensesGroup / DailyGroup / CargoCountLabel) — trip expenses, daily living, and cargo summary no longer share a column
 - [x] Merchant button on Hub → `GameManager.go_to_merchant_hub()` (full merchant flow lives in `merchant.md` / `merchant_shop.md` / `special_orders.md`)
 
 ## Soon

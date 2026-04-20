@@ -6,17 +6,20 @@ High-level milestones and deferred systems. Not an implementation spec — this 
 
 ## Value Hierarchy (reference for the sections below)
 
-| Name                      | Formula                                                              | Phase       | Role                                           |
-| ------------------------- | -------------------------------------------------------------------- | ----------- | ---------------------------------------------- |
-| `base_value`              | from identity layer definition                                       | data        | base price per identity layer                  |
-| `estimated_value_min/max` | `base_value × known_condition_mult × knowledge_min/max[layer_index]` | pre-reveal  | limited-info range during inspection / auction |
-| `appraised_value`         | `base_value × real_condition_mult × (1 + 0.01 × super_cat_rank)`     | post-reveal | true valuation, market-agnostic                |
-| `market_price`            | `appraised_value × market_factor`                                    | post-reveal | shopkeeper base offer reference                |
-| `shopkeeper_offer`        | `market_price × merchant_mult × negotiation`                         | transaction | live negotiation value                         |
+Every price resolves through the shared `ItemEntry.compute_price(config)` pipeline plus, where a range is shown, `compute_price_range(config)`. The `PriceConfig` toggles select which factors participate; there is no per-type formula living outside the pipeline.
+
+| Name                      | Config preset                                          | Range-shown | Role                                           |
+| ------------------------- | ------------------------------------------------------ | ----------- | ---------------------------------------------- |
+| `base_value`              | `price_config_plain` (no factors)                      | no          | identity-layer authored value                  |
+| `estimated_value_min/max` | `price_config_with_estimated` (condition/known + knowledge) | yes    | inspection-gated range shown in inspection, list review, reveal, cargo, run review, storage |
+| `market_price`            | `price_config_with_market` (condition/true + knowledge + market) | no | per-category post-market reference — MerchantData.offer_for reads this |
+| `merchant_offer`          | `market_price × merchant_multiplier`                   | no          | MerchantData.offer_for output; drives `MERCHANT_OFFER` column + negotiation base |
+| `special_order_price`     | order's PriceConfig (flags from SpecialOrderData + buff multiplier) | no | per-item payout in the fulfillment panel |
+| `shopkeeper_offer`        | `merchant_offer × negotiation`                         | no          | live negotiated price in the negotiation dialog |
 
 Naming convention: `_value` = appraisal-side, `_price` / `_offer` = transaction-side.
 
-**Note**: "knowledge factor" means different things at each row — `estimated_value` uses per-item knowledge_min/max (this item's uncertainty range), `appraised_value` uses the global super-category rank buff. Different concepts that happen to both be "knowledge-derived".
+Range convergence: the range width at `estimated_value` is driven by `inspection_level`, `center_offset`, and the rarity's `MAX_SPREADS` entry. At max inspection the range collapses to the single `compute_price` value (which, because `use_known_condition` reads the true multiplier once the condition bucket is maxed, matches the true underlying value). `appraised_value` no longer exists as a separate field — storage and run review read `estimated_value` directly.
 
 ---
 
@@ -30,59 +33,27 @@ Naming convention: `_value` = appraisal-side, `_price` / `_offer` = transaction-
 - **Merchant hand-off** — `GameManager.go_to_merchant_shop()` / `consume_pending_merchant()`.
 - **Step 1 — Foundation refactor** — `ItemEntry` field renames (`sell_price` → `appraised_value`, `current_price_*` → `estimated_value_*`); `PriceMode` renames (`SELL_PRICE` → `APPRAISED_VALUE`, `CURRENT_ESTIMATE` → `ESTIMATED_VALUE`); `MERCHANT_OFFER` price mode added; `Column.MARKET_FACTOR` added; `price_value_for(ctx)` dispatch; all call sites updated.
 - **Step 2 — Market system** — `SuperCategoryData` market tuning fields (`market_mean_min/max`, `market_stddev`, `market_drift_per_day`); `MarketManager` autoload with `advance_market(days)`, `get_category_factor()`, `get_super_category_trend()`; `SaveManager` persists `super_cat_means` and `category_factors_today`; `market_price` computed property on `ItemEntry`.
-- **Step 3 — Negotiation dialog + shop UI** — `MerchantData` negotiation fields (`ceiling_multiplier_min/max`, `anger_max`, `anger_k`, `anger_per_round`, `counter_aggressiveness`, `negotiation_per_day`); `NegotiationDialog` with anger/counter mechanics, ceiling mystery, lowball confirm; shop scene uses `ItemListPanel` with `MERCHANT_OFFER` price mode; daily negotiation limit persisted via `negotiations_used_today`; `MerchantRegistry.advance_day()` orchestrates special order rolls + negotiation resets.
+- **Step 3 — Negotiation dialog + shop UI** — `MerchantData` negotiation fields (`ceiling_multiplier_min/max`, `anger_max`, `anger_k`, `anger_per_round`, `counter_aggressiveness`, `auto_accept_threshold`, `auto_accept_p_min`, `negotiation_per_day`); `NegotiationDialog` with anger/counter mechanics, ceiling mystery, lowball confirm, auto-accept on small gaps; shop scene uses `ItemListPanel` with side-by-side `ESTIMATED_VALUE` + `MERCHANT_OFFER` columns; daily negotiation limit persisted via `negotiations_used_today`; `MerchantRegistry.advance_day()` orchestrates special order rolls + negotiation resets.
 
----
+- **Step 4 — Special orders end-to-end** — `SpecialOrderData` / `SpecialOrderSlotPoolEntry` (pool-driven slots, per-factor pricing flags, partial delivery, completion bonus, deadline); `SpecialOrder` / `OrderSlot` runtime types with `Eligibility` enum and cross-slot `check_eligibility()`; `MerchantRegistry._advance_orders()` cadence-driven rolls + expiry; fulfillment panel with order-level and per-slot eligibility indicators, side-by-side `ESTIMATED_VALUE` + `SPECIAL_ORDER` columns, partial/all-or-nothing confirm logic; completed order ids accumulated per merchant.
 
-**Categories reached through items**
+- **First-class category and super-category registries** — `CategoryRegistry` and `SuperCategoryRegistry` autoloads, each loading its own `data/tres/` directory; super-to-members index built by `SuperCategoryRegistry` at `_ready()` from `CategoryRegistry`; `get_super_category_for(category_id)` on `CategoryRegistry` serves the inverse lookup directly off the resource reference; `MarketManager._super_category_for` deleted; `ItemRegistry` no longer walks items for category queries; display-name helpers removed (callers read `.display_name` off the resource).
 
-Items, categories, and super-categories are all designer-authored resources with their own ids, display names, and tuning. But only items have a registry. Every question about a category or super-category that isn't answered through a direct reference on an in-hand item is answered by scanning the full item list.
+- **RegistryCoordinator + per-registry lifecycle** — every registry (`ItemRegistry`, `CarRegistry`, `LocationRegistry`, `CategoryRegistry`, `SuperCategoryRegistry`, `MerchantRegistry`, `KnowledgeManager`) opts in via `RegistryCoordinator.register(self)`; `GameManager._ready()` calls `run_migrations()` then `run_validation()`; boot-time audit now covers every id-bearing save field — locations, skills, category points, super/category market keys, perk ids, and merchant-order slot categories — replacing the earlier car+perk-only `RegistryAudit.run()` audit.
 
-This shows up wherever no item is already in hand — rendering the mastery panel, computing daily market drift for a category, describing a lot's item draw table, resolving a display name from an id. The only built index from super-category to its members is constructed by walking items at startup, display-name lookups scan items on every call, and the inverse question — which super-category owns a given category — is a linear scan inside the daily market roll.
+- **Estimated-value consolidation** — `appraised_value` / `appraised_value_label` and `APPRAISED_VALUE` column removed; `estimated_value` becomes a min-max range driven by `inspection_level`, `center_offset`, and per-rarity `MAX_SPREADS`; range collapses to the true value at max inspection; `price_config_with_estimated` and `compute_price_range(config)` added; `knowledge_min/max` arrays deleted; Market Research as a standalone storage action is removed (its range-narrowing payout absorbed by the STUDY research slot).
 
-Nothing is incorrect, but the data shape is upside down. Categories and super-categories are the stable, small, designer-authored data; items are the larger table that references them. The registry layer doesn't reflect that direction.
+- **Per-lot inspection + research slots** — inspection switched from per-card `ActionPopup` to lot-level `LotActionBar` (Inspect 2 SP / Try to Peek 3 SP); `actions_remaining` per-lot budget via `LotData.action_quota`; `ResearchSlot` value object replaces `ActiveActionEntry`; storage scene owns the research verb surface (Study / Repair / Unlock assignment, removal, disabled-reason tooltips); day-tick in `SaveManager._tick_research_slots` drives the three actions with skill-and-mastery speed factors; hub Storage button badge `(N done)`.
 
-- **First-class category and super-category registries** — Each has its own autoload keyed by id, built by loading its own resource directory directly. Lookups by id, display-name resolution, and the super-to-members mapping are served from these registries.
+- **Unified inspection level + veiled UI strip** — single `inspection_level: float` replaces `condition_inspect_level` + `potential_inspect_level`; per-rarity `RARITY_THRESHOLDS` table; `Column.RARITY` replaces `Column.POTENTIAL`; `ItemViewContext` `ConditionMode` / `PotentialMode` enums removed; veiled items show simplified card (name + base value only); final-layer non-veiled indicator via name suffix.
 
-- **Item registry holds items only** — The super-category index, the display-name helpers for both levels, and the id-based category lookup move to the new registries. Item queries stay where they are.
-
-- **Direct super-for-category lookup** — Each category resource already knows its super-category; the category registry exposes that directly, replacing the linear scan inside the market roll.
-
----
-
-**Registry audit covers cars and perks, nothing else**
-
-The startup audit verifies that the active and owned car ids, and the unlocked perk ids, still resolve against their registries. Every other save-persisted id can go stale without the audit noticing — available locations, tracked skill levels, accumulated category points, market drift means, and the items and categories referenced inside in-flight merchant order slots. When something is renamed or removed in the data pipeline, these surface later as silent misses or null chases rather than as a clear boot-time failure.
-
-- **Coverage for every id-bearing save field** — The audit walks each save field that stores a registry id and verifies it resolves against the matching registry. Missing ids are reported once per field with the offending key, matching how car and perk checks already behave.
-
----
-
-**Registry boilerplate duplication**
-
-Every resource-backed system — items, cars, locations, merchants, perks, skills —
-defines its own registry autoload with the same underlying shape: a dictionary
-keyed by id, a loader on ready, and the same lookup / list / size surface.
-Only the element type differs.
-
-The duplication has already started to drift. Some registries grew extras —
-a super-category index, per-day order bookkeeping — while the others stayed minimal.
-
-**Decision:** A shared base class is not worth the cost. GDScript's lack of
-generics means typed `get_<T>()` / `get_all_<T>()` wrappers must be
-re-declared in every subclass regardless, saving only the loader boilerplate.
-The registry standard doc (`dev/standards/registries.md`) and its checklist
-are the enforcement mechanism.
-
-Cross-cutting behaviour (migrations, validation, audit) is addressed separately
-by the `RegistryCoordinator` autoload — each registry opts in by implementing
-`migrate()` / `validate()` and registering in `_ready()`.
+- **Negotiation auto-accept** — small-gap proposals are probabilistically accepted at the proposed price instead of forcing a counter round; `auto_accept_threshold` / `auto_accept_p_min` on `MerchantData`.
 
 ---
 
 ## Current Phase
 
-#### Step 4 — Merchant content
+#### Merchant content
 
 - Specialist merchant YAML: Antique Dealer, Arms Dealer, Fashion Buyer.
 - Tune `price_multiplier` / `ceiling_multiplier_min/max` / `anger_k` /
@@ -117,25 +88,9 @@ stabilise until earlier systems impose real constraints on a run.
 
 ---
 
-**Item knowledge & inspection overhaul**
+**Layer depth tied to rarity — content rewrite**
 
-The current system exposes too much structured information too cheaply. Players read layer depth, potential rating, and condition tier directly from the item list, which collapses storage decisions into parameter comparison rather than judgment under uncertainty. The existing inspect actions follow the same logic as the storage list — they fill in blanks behind a stamina cost. The goal is to make information feel earned and lossy, not just gated.
-
-- **Unified inspection level** — Each item carries a single continuous inspection value in place of the separate condition and potential inspect levels. The UI reads bucketed labels off this value rather than showing the raw number.
-
-- **Per-rarity rarity buckets** — The thresholds at which the rarity label sharpens depend on the item's true rarity. Common is always fully visible; the higher tiers share a four-step ladder ending in their own name, with a deliberate "Rare+" middle band that hides whether the item is Rare, Epic, or Legendary.
-
-- **Condition buckets decoupled from rarity** — Condition reads use their own threshold ladder so the player cannot infer rarity from how easy condition was to read. The same inspection value feeds both ladders through different functions.
-
-- **Veiled state simplified** — Veil remains the base layer, but the automatic unlock context that promoted veiled items on arrival is removed. The reveal phase advances veiled items unconditionally. In the lot, a veiled item shows its base-layer name and base value rather than a category label.
-
-- **UI strip** — Potential rating and numeric layer depth are removed from rows, cards, and tooltips. Rarity bucket becomes the main value signal; the only structural layer information surfaced is whether the current layer is the final one.
-
-- **Per-lot inspection** — Inspection acts on the lot rather than per-card. Each action randomly targets one unveiled item and either raises its inspection value or attempts to lift the veil. The X-Ray variant requires a perk and resolves a fully veiled item in one shot.
-
-- **Research hub** — A new sub-screen alongside Storage holds active and queued research slots. Each day-tick applies effects to the active slots based on a player-set priority across study, repair, and unlock attempt. Market Research as a standalone action is gone; its price-range narrowing becomes a study side-effect.
-
-- **Layer depth tied to rarity** — Common items are predominantly single-layer and resolve on arrival. Each rarity step adds one unlock layer, so the unlock decision is structurally bound to rarity rather than read off a potential calculation.
+The validator already enforces rarity-vs-depth bands (see `dev/tools/tres_lib/entities/item.py`: Common 2 layers, Uncommon 2–3, Rare 3–4, Epic 4–5, Legendary 5). The remaining work is purely content — rewriting existing `.tres` items so Common rolls resolve on arrival (single layer, no unlock chain) and higher rarities use deeper chains with shared trunks and cross-chain mid-layers. Whether single-layer Commons should still roll `center_offset` and show a price range, or whether their price should just be exact from the start, is an open question that surfaces once the rewrite lands.
 
 ---
 

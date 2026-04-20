@@ -50,13 +50,13 @@ Reputation tracked per `merchant_id` (or faction) in `SaveManager`. Degrades on 
 
 ### Expert Network (Appraisers) _(deferred)_
 
-Appraisers narrow `knowledge_min/max` — see Notes for the open design question that blocks this.
+Appraisers would narrow the estimated-value range by nudging `inspection_level` — see Notes for the open design question that blocks this.
 
 ## Notes
 
-### Appraisers vs Market Research
+### Appraisers vs research STUDY
 
-Open question: appraisers currently narrow `knowledge_min/max`, the same outcome as Market Research. Decide whether they're a stronger version, or something distinct — reveal a specific layer without advancing it, permanently cached knowledge, or a one-off category points boost. Until this is decided, the Expert Network UI has no content to show.
+Open question: appraisers currently narrow the estimated-value range the same way a research STUDY slot does (both raise `inspection_level` over time). Decide whether they're a stronger / instant version, or something distinct — reveal a specific layer without advancing it, permanently cached knowledge, or a one-off category points boost. Market Research as a standalone storage action is gone; that payout has been absorbed by the STUDY research slot. Until appraisers are redesigned, the Expert Network UI has no content to show.
 
 ### Reputation and scam flow must be designed together
 

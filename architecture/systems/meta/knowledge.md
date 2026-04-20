@@ -12,8 +12,8 @@ Give the player three distinct progression axes that don't substitute for each o
 - `SaveManager.skill_levels` — per-skill level (persisted)
 - `SaveManager.unlocked_perks` — unlocked perk ids (persisted)
 - `SaveManager.cash` — consumed by skill upgrades
-- `ItemRegistry.get_categories_for_super()` — used to aggregate super-category rank
-- `ItemEntry` + `LayerUnlockAction.ActionContext` — advance-check inputs
+- `SuperCategoryRegistry.get_categories_for_super()` — used to aggregate super-category rank
+- `ItemEntry` — advance-check inputs (current layer's `LayerUnlockAction` gates)
 
 ## Writes
 
@@ -70,9 +70,9 @@ Notably absent: `required_mastery_rank` and `required_super_category_rank`. Glob
 `KnowledgeManager` autoload API surface:
 
 ```gdscript
-enum KnowledgeAction { POTENTIAL_INSPECT, CONDITION_INSPECT, REVEAL, APPRAISE, REPAIR, SELL }
+enum KnowledgeAction { INSPECT = 1, REVEAL = 2, APPRAISE = 3, REPAIR = 4, SELL = 5 }
 enum UpgradeResult  { OK, MAX_LEVEL, INSUFFICIENT_SUPER_CATEGORY_RANK, INSUFFICIENT_MASTERY_RANK, INSUFFICIENT_CASH }
-enum AdvanceCheck   { OK, NO_ACTION, WRONG_CONTEXT, INSUFFICIENT_CATEGORY_RANK, INSUFFICIENT_SKILL, MISSING_PERK }
+enum AdvanceCheck   { OK, NO_ACTION, INSUFFICIENT_CATEGORY_RANK, INSUFFICIENT_SKILL, MISSING_PERK }
 
 const RANK_THRESHOLDS: Array[int]   # [0, 100, 400, 1600, 6400, 25600] — public, read by UI
 
@@ -81,8 +81,6 @@ func add_category_points(category_id: String, rarity: ItemData.Rarity, action: K
 func get_category_rank(category_id: String) -> int
 func get_super_category_rank(super_category_id: String) -> int
 func get_mastery_rank() -> int
-func get_price_range(super_category_id: String, rarity: ItemData.Rarity, layer_depth: int = 0) -> Vector2
-func apply_market_research(entry: ItemEntry) -> void
 
 # Skill
 func get_level(skill_id: String) -> int
@@ -100,10 +98,13 @@ func perk_count() -> int
 func skill_count() -> int
 
 # Layer unlock
-func can_advance(entry: ItemEntry, context: LayerUnlockAction.ActionContext) -> AdvanceCheck
+func can_advance(entry: ItemEntry) -> AdvanceCheck
+
+# Registry-coordinator lifecycle
+func validate() -> bool
 ```
 
-Internal state: `_skill_registry: Dictionary` and `_perk_registry: Dictionary`, both populated at `_ready()`.
+Internal state: `_skill_registry: Dictionary` and `_perk_registry: Dictionary`, both populated at `_ready()` via `ResourceDirLoader.load_by_id(DataPaths.SKILLS_DIR, …)` / `DataPaths.PERKS_DIR`. `KnowledgeManager` registers itself with `RegistryCoordinator` on `_ready()` so its `validate()` runs at boot alongside every other registry.
 
 ### Mastery — Four Derived Layers
 
@@ -114,7 +115,7 @@ Category Points  ──►  Category Rank  ──►  Super-Category Rank  ─�
    (stored)         (step thresholds)      (sum of categories)      (sum of supers)
 ```
 
-**Layer 1 — Category Points.** Persistent integer per category in `SaveManager.category_points`. Granted by `add_category_points()`; gain = `_BASE_MASTERY[action] * (rarity + 1)`. Base mastery per action: `POTENTIAL_INSPECT=2`, `CONDITION_INSPECT=2`, `REVEAL=1`, `APPRAISE=4`, `REPAIR=4`, `SELL=3`. Points never reset, never spend, never gate anything directly — they exist only to produce category rank.
+**Layer 1 — Category Points.** Persistent integer per category in `SaveManager.category_points`. Granted by `add_category_points()`; gain = `_BASE_MASTERY[action] * (rarity + 1)`. Base mastery per action: `INSPECT=2` (lot-level inspect action), `REVEAL=1` (layer advance, Peek/Reveal), `APPRAISE=4` (research STUDY), `REPAIR=4` (research REPAIR), `SELL=3` (merchant sale or special order turn-in). Points never reset, never spend, never gate anything directly — they exist only to produce category rank.
 
 **Layer 2 — Category Rank.** Step function over points, range 0–5, driven by the public `RANK_THRESHOLDS` constant on `KnowledgeManager`:
 
@@ -131,7 +132,7 @@ Category Points  ──►  Category Rank  ──►  Super-Category Rank  ─�
 
 Used by `LayerUnlockAction.required_category_rank` — the only place category rank directly gates anything. A layer like "Spode Blue Italian Vase" can require oil-lamp category rank ≥ 2 before its unlock action becomes available, regardless of skill or super-category rank.
 
-**Layer 3 — Super-Category Rank.** Sum of category ranks within a super-category. Reads `ItemRegistry.get_categories_for_super()`. Used by `get_price_range()` (tightens `knowledge_min/max` multipliers) and `SkillLevelData.required_super_category_ranks`.
+**Layer 3 — Super-Category Rank.** Sum of category ranks within a super-category. Reads `SuperCategoryRegistry.get_categories_for_super()`. Used by `ItemEntry.create()` / `reveal()` (drives the inspection-level head start via `INSPECTION_BASE + rank × INSPECTION_PER_RANK`), by `ItemEntry.compute_price(config_with_knowledge)` (`value *= 1.0 + 0.01 × rank`), and by `SkillLevelData.required_super_category_ranks`.
 
 **Layer 4 — Mastery Rank.** Global level. Sum of all super-category ranks. Used by `SkillLevelData.required_mastery_rank` and future content gates (prestige, tier-locked auction houses, NPC reaction tiers). Never directly gates layers.
 
@@ -147,7 +148,9 @@ Binary, granted by content (quests, found items, faction thresholds). Not purcha
 
 ### Layer Unlock (`can_advance`)
 
-`can_advance(entry, context)` returns `AdvanceCheck`, not bool, so callers can produce disabled-reason tooltips without re-running the check. Check order: action exists → context matches → category rank → skill → perk. First failure returned. Callers that only care about the bool compare against `AdvanceCheck.OK`; callers that need a tooltip switch on the enum.
+`can_advance(entry)` returns `AdvanceCheck`, not bool, so callers can produce disabled-reason tooltips without re-running the check. Check order: action exists (layer is not final) → category rank → skill → perk. First failure returned. Callers that only care about the bool compare against `AdvanceCheck.OK`; callers that need a tooltip switch on the enum.
+
+There is no `ActionContext` parameter. Layer-0 → 1 reveal is handled unconditionally by the reveal scene and by the Peek inspection action; every other layer advance runs through the research-slot UNLOCK dispatch in `SaveManager._tick_research_slots`, which calls `can_advance(entry)` on each tick.
 
 ### Knowledge Hub Navigation
 
@@ -173,12 +176,11 @@ Mapping:
 
 - `OK` → `""` (button enabled)
 - `NO_ACTION` → `"Cannot advance further"`
-- `WRONG_CONTEXT` → `"Must be performed at home"`
 - `INSUFFICIENT_CATEGORY_RANK` → `"Need <entry's category> rank <N>"`
 - `INSUFFICIENT_SKILL` → `"Need <skill> level <N>"`
 - `MISSING_PERK` → `"Requires perk: <perk name>"`
 
-Used by Storage scene Unlock button and any future gated UI.
+Used by the storage scene's research-action popup (gates the Unlock button) and any future gated UI.
 
 ## Notes
 
@@ -204,16 +206,18 @@ Layer gates use category rank (item-specific) or skill (trained competence). Mas
 
 - [x] `SaveManager.category_points` / `skill_levels` / `unlocked_perks` persistence
 - [x] `get_category_rank()`, `get_super_category_rank()`, `get_mastery_rank()` (four-layer model)
-- [x] `get_price_range()` rarity-vs-rank curve and `apply_market_research()`
+- [x] Super-category rank drives inspection-level head start (`INSPECTION_BASE + rank × INSPECTION_PER_RANK`, shared by `ItemEntry.create()` and `reveal()`) and the knowledge term in `ItemEntry.compute_price(config_with_knowledge)`; the old `get_price_range()` helper and `apply_market_research()` were removed as part of the estimated-value consolidation
 - [x] `PerkData` + `_perk_registry` + `unlock_perk` / `has_perk` / `get_all_perks`
 - [x] `SkillData` / `SkillLevelData` + `_skill_registry` + `get_level()` / `get_all_skills()`
 - [x] `try_upgrade_skill()` + `peek_upgrade()` with `UpgradeResult` enum and tooltip-friendly failure modes
-- [x] `LayerUnlockAction` full gate set: `required_category_rank`, `required_skill`, `required_level`, `required_perk_id`
-- [x] `can_advance()` returns `AdvanceCheck` enum with disabled-reason support
+- [x] `LayerUnlockAction` full gate set: `required_category_rank`, `required_skill`, `required_level`, `required_condition`, `required_perk_id`, `difficulty`
+- [x] `can_advance(entry)` returns `AdvanceCheck` enum with disabled-reason support; `ActionContext` parameter removed (research-slot UNLOCK dispatch handles home-context advances)
+- [x] `KnowledgeAction` enum cleaned up: `INSPECT = 1`, `REVEAL = 2`, `APPRAISE = 3`, `REPAIR = 4`, `SELL = 5` — explicit ints, no `POTENTIAL_INSPECT` / `CONDITION_INSPECT`
 - [x] Knowledge Hub + Mastery / Skill / Perk sub-panels
 - [x] `AdvanceCheckLabel` disabled-reason strings on every gated UI
 - [x] Skill content authored
-- [x] X-Ray perk content (`xray_inspect`) + `ItemEntry.unveil()` consolidation
+- [x] X-Ray perk content (`xray_inspect`) + `ItemEntry.unveil()` consolidation — now boosts Peek success from 50 % to 100 %
+- [x] `KnowledgeManager.validate()` registered with `RegistryCoordinator` — boot-time audit of `unlocked_perks` and `skill_levels` keys
 
 ## Soon
 

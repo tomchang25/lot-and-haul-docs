@@ -77,10 +77,12 @@ No hub or run scene is modified directly.
 | Dialog system        | New    | DialogManager overlay autoload; linear with Uncle branching; data-driven from the start    |
 | Skill system         | Done   | Full three-pillar knowledge system implemented (see ../systems/meta/knowledge.md)          |
 | Perk system          | Done   | Registry, X-ray perk, `has_perk()` API all implemented                                     |
-| X-ray inspect action | Done   | 3 SP action in inspection scene; gated by `xray_inspect` perk; uses `entry.unveil()`       |
-| Merchant v2          | Done   | Full sell flow with MerchantData; replaces on-site flat sell as the cash-out point         |
+| X-ray inspect action | Done   | Folded into the lot-level Peek action (3 SP); the `xray_inspect` perk boosts Peek success from 50 % to 100 %; uses `entry.unveil()` |
+| Merchant v2          | Done   | Full sell flow with MerchantData, negotiation dialog (including auto-accept), and special-order fulfillment panel |
+| Special orders       | Done   | Slot-pool templates, per-factor pricing flags, partial-delivery toggle, cadence-driven rolls, fulfillment panel with cross-slot eligibility preview |
 | Mastery gate         | New    | Location browse availability check against mastery rank for high-tier auctions             |
-| CarData variants     | Done   | Min 2–3 additional .tres files (large van for Run 1, small van for post-reset)             |
+| CarData variants     | Done   | 4+ `.tres` files under `data/tres/cars/` spanning a progression; purchasable via car shop  |
+| Research hub         | Done   | Storage scene owns the research verb surface (Study / Repair / Unlock slots); `SaveManager.research_slots` ticked in `advance_days()` |
 | Test item set        | New    | High base value, shallow layers, tuned for director runs                                   |
 | Demo cutscene        | New    | Standalone scene; asset wipe, car swap, city transition; entirely isolated from production |
 

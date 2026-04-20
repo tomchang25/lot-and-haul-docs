@@ -37,7 +37,7 @@ On confirm: `GameManager.go_to_location_entry()`.
 
 ### Location Select Scene
 
-`game/meta/location_select/location_select.gd` + `.tscn` — implemented. Sits between `hub` and `location_entry`. Displays `LocationCard` entries for available locations. `SaveManager.available_location_ids` is rolled each day advance via `roll_available_locations()` (shuffles all location IDs, picks `Economy.LOCATION_SAMPLE_SIZE`). Cards show display name, description, entry fee, travel days, and lot count. On select, the scene constructs `RunManager.run_record = RunRecord.create(location, SaveManager.active_car)` and calls `GameManager.go_to_location_entry()`.
+`game/meta/location_select/location_select.gd` + `.tscn` — implemented. Sits between `hub` and `location_entry`. Displays `LocationCard` entries for available locations. `SaveManager.available_location_ids` caches the per-day sample; `_populate_cards()` rolls via `roll_available_locations()` (shuffles all location IDs, picks `Economy.LOCATION_SAMPLE_SIZE`) if the list is empty, otherwise resolves each id through `LocationRegistry.get_location()` and skips unknown ids. The sample is invalidated exclusively inside `SaveManager.advance_days()`, so re-entering Location Select from either the hub day-pass flow or the post-run flow always sees the same sample until the day actually advances. Cards show display name, description, entry fee, travel days, and lot count. On select, the scene constructs `RunManager.run_record = RunRecord.create(location, SaveManager.active_car)` and calls `GameManager.go_to_location_entry()`. `CardsContainer` is wrapped in a horizontal `ScrollContainer` as a safety net against sample-size growth.
 
 Still TODO on the card: computed pre-run cost `entry_fee + (fuel_cost_per_day × travel_days)` against the active car. The card does not currently read the active car at all.
 
@@ -69,13 +69,13 @@ Cargo already reads `car_data.fuel_cost_per_day`, so the pre-run cost preview ha
 - [x] `RunRecord.create(location_data, car_data)` consumes `LocationData` and locks travel costs via `compute_travel_costs()`
 - [x] `game/meta/location_select/` scene listing available locations with entry fee, travel days, lot count, and description; builds `RunRecord` on select and advances to `location_entry`
 - [x] `location_entry.tscn` reads `location_data` from `RunManager.run_record` instead of `@export`
+- [x] `SaveManager.available_location_ids` / `roll_available_locations()` / `Economy.LOCATION_SAMPLE_SIZE` — location pool sampled and cached per day, invalidated only in `advance_days()`
+- [x] Location select `CardsContainer` wrapped in horizontal `ScrollContainer` safety net
+- [x] YAML → `.tres` pipeline authored for locations and lots (`data/yaml/location_data.yaml`, `data/yaml/lot_data.yaml`, `dev/tools/tres_lib/entities/location.py`, `dev/tools/tres_lib/entities/lot.py`), including rejection of unknown `category_weights` / `super_category_weights` keys both in the Python validator and at boot via `LocationRegistry.validate()`
 
 ## Soon
 
 - [ ] `LocationCard`: read active car and show pre-run cost preview (`entry_fee + fuel_cost_per_day × travel_days`)
-- [ ] Extend YAML → `.tres` pipeline to author locations and their lot pools
-- [ ] Location Yaml
-- [ ] Lot Yaml
 - [ ] Author 3–5 starter locations with distinct risk profiles, tuned primarily via `aggressive_lerp` ranges
 
 ## Blocked

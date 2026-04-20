@@ -17,9 +17,8 @@ Designer-authored Resource definitions used across all blocks.
 @export var market_drift_per_day: float = 0.05  # Gaussian step std dev for daily random walk
 ```
 
-`.tres` files under `data/super_categories/`.
-`ItemRegistry` builds a reverse index (`super_category_id → Array[category_id]`) at startup.
-`MarketManager` reads the market tuning fields to drive per-category price factors.
+`.tres` files under `data/tres/super_categories/`.
+`SuperCategoryRegistry` loads them and builds a `super_category_id → Array[CategoryData]` index at startup via its `_build_categories_by_super_index()` (reads `CategoryRegistry.get_all_categories()`). `MarketManager` reads the market tuning fields to drive per-category price factors.
 
 ### `CategoryData` (`data/definitions/category_data.gd`)
 
@@ -33,7 +32,7 @@ Designer-authored Resource definitions used across all blocks.
 func get_cells() -> Array[Vector2i]      # delegates to CargoShapes.get_cells(shape_id)
 ```
 
-`.tres` files under `data/categories/`.
+`.tres` files under `data/tres/categories/`. `CategoryRegistry` loads them at startup and exposes `get_category(id)` / `get_all_categories()` / `get_super_category_for(category_id)` (the direct resource reference, O(1)).
 
 ### `ItemData` (`data/definitions/item_data.gd`)
 
@@ -41,12 +40,12 @@ func get_cells() -> Array[Vector2i]      # delegates to CargoShapes.get_cells(sh
 @export var item_id: String
 @export var category_data: CategoryData
 @export var identity_layers: Array[IdentityLayer]
-@export var rarity: Rarity   # COMMON / UNCOMMON / RARE / EPIC / LEGENDARY; lot-draw filter only
+@export var rarity: Rarity   # COMMON / UNCOMMON / RARE / EPIC / LEGENDARY; lot-draw filter + inspection ladder key
 
 enum Rarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
 ```
 
-`.tres` files under `data/items/`.
+`.tres` files under `data/tres/items/`. Rarity also keys `ItemEntry.RARITY_THRESHOLDS` (per-rarity inspection ladder) and `MAX_SPREADS` (per-rarity price-range width) — adding a rarity is one enum entry plus one row in each of those dictionaries.
 
 ### `IdentityLayer` (`data/definitions/identity_layer.gd`)
 
@@ -57,20 +56,22 @@ enum Rarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
 @export var unlock_action: LayerUnlockAction   # null on the final layer
 ```
 
-Inline sub-resource inside `ItemData`, or standalone `.tres` under `data/identity_layers/` for reuse.
+Inline sub-resource inside `ItemData`, or standalone `.tres` under `data/tres/identity_layers/` for reuse.
 
 ### `LayerUnlockAction` (`data/definitions/layer_unlock_action.gd`)
 
-See `../meta/knowledge.md` for the full resource definition, gate fields, and `can_advance()` enum.
+See `../meta/knowledge.md` for the full resource definition, gate fields, and `can_advance()` enum. Fields:
 
 ```gdscript
-enum ActionContext { AUTO, HOME }
+@export var difficulty: float = 1.0           # effort needed before the unlock fires
+@export var required_skill: SkillData = null
+@export var required_level: int = 0
+@export var required_condition: float = 0.0
+@export var required_category_rank: int = 0
+@export var required_perk_id: String = ""
 ```
 
-| Value  | Meaning                                                                                                                                  |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `AUTO` | Not used for player actions. Present for schema completeness on layer-0 definitions; actual 0→1 advance is handled in `reveal_scene.gd`. |
-| `HOME` | Requires home workshop. Checked in `storage_scene.gd`.                                                                                   |
+`LayerUnlockAction.ActionContext` no longer exists. Layer-0 reveal is handled unconditionally by the reveal scene (or Peek during inspection); research's UNLOCK slot drives all home-context advances and gates purely on category rank / skill / perk.
 
 ### `SkillData` (`data/definitions/skill_data.gd`)
 
@@ -225,10 +226,11 @@ Inline sub-resource under `SpecialOrderData.slot_pool`. Each generated slot pick
 ## Done
 
 - [x] `ItemData` with `identity_layers: Array[IdentityLayer]` and `category_data: CategoryData`
-- [x] `SuperCategoryData` resource; `ItemRegistry` super-category reverse index
+- [x] `SuperCategoryData` resource; super-category reverse index served by `SuperCategoryRegistry`
 - [x] `CategoryData` with `shape_id` and `get_cells()`
-- [x] `ItemData.rarity` enum — lot-draw filter only, never displayed
-- [x] `LayerUnlockAction` with full gate set: `context`, `required_skill`, `required_level`, `required_condition`, `required_category_rank`, `required_perk_id`
+- [x] `CategoryRegistry` / `SuperCategoryRegistry` autoloads — first-class lookup and member-index (no more item-scans)
+- [x] `ItemData.rarity` enum — keys both the lot-draw filter and the inspection rarity ladder (`get_potential_rating()`)
+- [x] `LayerUnlockAction` with full gate set: `difficulty`, `required_skill`, `required_level`, `required_condition`, `required_category_rank`, `required_perk_id`; `ActionContext` enum removed after research slots replaced AUTO/HOME dispatch
 - [x] `CarData` with `grid_columns`, `grid_rows`, `extra_slot_count`, `stamina_cap`, `fuel_cost_per_day`, `max_weight`, `price`, `icon`, `stats_line()`, `trailer_damage_chance/ratio_min/ratio_max`
 - [x] `LotData.super_category_weights` — super-category roll before category roll in `LotEntry._draw_item()`
 - [x] `LotData.lot_id` field
