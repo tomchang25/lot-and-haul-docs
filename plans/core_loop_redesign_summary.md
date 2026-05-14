@@ -65,6 +65,7 @@ Clues 是獨立系統，全部掛在 Item 上定義。部分 clue 可以跨 item
 **prerequisite** — 門檻條件，結構與現有 LayerUnlockAction 一致：category_rank、skill + level、perk、inspection_level 下限。全部 optional，沒寫就是無門檻。純 bool check。
 
 **trigger** — 揭露方式，兩種：
+
 - **passive** — 符合 prerequisite 的瞬間自動揭露。老手進 Inspection 點開物品，系統掃一遍，prerequisite 過了就直接亮。這是「老手一看就 3/9」的那個 3。
 - **on_action** — 符合 prerequisite 之後，還需要玩家執行特定動作才揭露。Inspection 裡多花一次 stamina、或 Home 階段做一次 Study action，每次動作揭露一條未揭露且 prerequisite 已滿足的 clue。
 
@@ -105,16 +106,37 @@ Clues 是獨立系統，全部掛在 Item 上定義。部分 clue 可以跨 item
 
 這一階段已解決「跑一趟完全沒有正回饋」的核心痛點。玩家仍需在 Inspection 階段花 inspect action 才知道某個未知物件是 Item 還是 Commodity；Reveal 後 Commodity 會顯示並自動賣出。
 
-### Phase 2 — Inspection Grid 重做（下一步，依賴 Phase 0）
+### Phase 2 — Timed Inspection Grid Pre-Plan
 
-最大的一塊，拆成四步：
+## 1. Goal
 
-1. Grid 佈局和物品擺放（8×8 格子、隨機放置、黑色剪影顯示）
-2. 點擊 reveal 互動（花 stamina、顯示顏色和 layer 1 資訊）
-3. 遮擋成本計算（row tier + column scan：前兩排 1 點，中間排視遮擋加到 2 點，後排以此類推到 3-4 點。逐 cell 掃描取最佳視線）
-4. Tooltip card（hover 顯示已知資訊）
+Replace the current checklist-style Inspection flow with a timed grid-search prototype. The goal is to test whether limited-time object discovery creates better tension and decision-making than stamina-based repeated inspection, while avoiding premature investment in the old `inspection_level` model before Clues is redesigned.
 
-每一步都可以獨立跑起來看。沒有 Clues 的 Inspection grid 就是只顯示 layer 1 基本資訊，已經比現在的清單好。Phase 1 已經先把前台 display API 統一成 `LotObjectEntry`，Phase 2 可以直接復用這套 card/list/tooltip 表現，不需要再分 Item / Commodity 兩條 UI 路。
+## 2. Requirements
+
+1. Timed inspection phase - replace freeform card-list inspection with a fixed-duration search phase, initially around 20 seconds per lot.
+2. Grid-based discovery - present lot contents as unknown silhouettes in an inspection grid, where players choose which objects to search under time pressure.
+3. Search-to-reveal interaction - clicking an unknown object starts a short search timer, roughly 2-5 seconds, after which the object is revealed.
+4. One reveal per object - revealed objects cannot be further inspected during this phase; deeper understanding is deferred to the future Clues system.
+5. Random layer reveal for Items - when an Item is revealed, expose a random valid identity layer instead of advancing the existing inspection-level loop, to prototype the feel of partial understanding.
+6. Commodity compatibility - Commodities reveal through the same grid interaction and continue to support their existing auto-sale behavior after reveal.
+7. Post-timer summary - when time ends, transition to an Inspection Summary view showing revealed and unrevealed objects, with options to enter Auction or Pass.
+
+## 3. Non-Goals
+
+1. Do not implement Clues, clue prerequisites, or clue-triggered actions.
+2. Do not redesign `inspection_level`, scrutiny, condition precision, or value confidence yet.
+3. Do not support additional inspection actions on already revealed objects in this phase.
+4. Do not allow entering Auction directly from the timed search screen before the inspection timer ends.
+5. Do not change Cargo, Storage, Merchant, Research, or Day Summary behavior beyond compatibility with revealed objects.
+
+## 4. Acceptance Criteria
+
+1. Players experience Inspection as a timed search phase rather than a checklist of inspectable cards.
+2. A typical 20-second inspection lets players reveal only a limited subset of lot objects, usually around 5-6 depending on search times.
+3. Revealed Items show a randomly selected identity layer and do not expose a follow-up inspect loop.
+4. Revealed Commodities display their known commodity information and remain compatible with the existing sale resolution.
+5. When the timer expires, players are shown a summary before deciding whether to proceed to Auction or Pass.
 
 ### Phase 3 — Clues 系統（資料層依賴 Phase 0，不依賴 Phase 2）
 
